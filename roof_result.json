@@ -1,0 +1,30 @@
+{
+  "address": "Fasanenstraße 23, 68309 Mannheim, Germany",
+  "lat": 49.5115139,
+  "lon": 8.5124291,
+  "location_type": "ROOFTOP",
+  "total_roof_area_m2": 162.06,
+  "total_estimated_kwp": 29.17,
+  "planes": [
+    {
+      "cluster_id": 0,
+      "area_m2": 89.76,
+      "tilt_deg": 46.1,
+      "azimuth_deg": 201.7,
+      "suitability": "high",
+      "estimated_kwp": 16.16,
+      "triangle_count": 2
+    },
+    {
+      "cluster_id": 1,
+      "area_m2": 72.3,
+      "tilt_deg": 46.8,
+      "azimuth_deg": 27.4,
+      "suitability": "low",
+      "estimated_kwp": 13.01,
+      "triangle_count": 2
+    }
+  ],
+  "preview": "C:\\Users\\admin\\Desktop\\Cloud\\hackathon\\q 2026\\the_ai_sales_coach\\roof_topdown.png",
+  "preview_3d": "C:\\Users\\admin\\Desktop\\Cloud\\hackathon\\q 2026\\the_ai_sales_coach\\roof_preview_3d.html"
+}
