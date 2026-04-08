@@ -17,6 +17,7 @@ import ReadyCTA from "@/components/ReadyCTA";
 import MarketContext from "@/components/MarketContext";
 import DataTrust from "@/components/DataTrust";
 import SalesCoach from "@/components/SalesCoach";
+import RoofAnalysisTab from "@/components/RoofAnalysisTab";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -248,6 +249,11 @@ export default function BriefingPage() {
             description="Roof inspection, electrical panel check, and site survey items will appear here."
           />
         </div>
+      )}
+
+      {/* Roof Analysis - NEUER TAB */}
+      {activeSection === "roof" && (
+        <RoofAnalysisTab />
       )}
 
       {/* Offers — main section */}
