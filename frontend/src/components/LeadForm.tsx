@@ -6,17 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createLead } from "@/lib/api";
+import { createLead, validateLocation } from "@/lib/api";
 
 export default function LeadForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [locationError, setLocationError] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setLocationError(false);
 
     const fd = new FormData(e.currentTarget);
     const payload = {
@@ -25,6 +27,14 @@ export default function LeadForm() {
       zip_code: fd.get("zip_code") as string,
       product_interest: (fd.get("product_interest") as string) || undefined,
     };
+
+    // Sanity-check: make sure the address resolves to a real location
+    const locationValid = await validateLocation(payload.address, payload.zip_code);
+    if (!locationValid) {
+      setLocationError(true);
+      setLoading(false);
+      return;
+    }
 
     try {
       const lead = await createLead(payload);
@@ -53,18 +63,38 @@ export default function LeadForm() {
 
           <div className="grid gap-2">
             <Label htmlFor="address">Street Address</Label>
-            <Input id="address" name="address" placeholder="Musterstraße 42" required />
+            <Input
+              id="address"
+              name="address"
+              placeholder="Musterstraße 42"
+              required
+              onChange={() => setLocationError(false)}
+            />
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="zip_code">Postal Code</Label>
-            <Input id="zip_code" name="zip_code" placeholder="68159" required minLength={4} maxLength={10} />
+            <Input
+              id="zip_code"
+              name="zip_code"
+              placeholder="68159"
+              required
+              minLength={4}
+              maxLength={10}
+              onChange={() => setLocationError(false)}
+            />
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="product_interest">Product Interest (optional)</Label>
             <Input id="product_interest" name="product_interest" placeholder="Solar, Battery, Heat Pump, Wallbox" />
           </div>
+
+          {locationError && (
+            <p className="text-sm text-destructive">
+              We couldn&apos;t find that address. Please double-check the street and postal code and try again.
+            </p>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

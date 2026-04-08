@@ -1,5 +1,25 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/**
+ * Validates that an address + postal code resolves to a real location
+ * using OpenStreetMap's Nominatim geocoding API (free, no key required).
+ * Returns true if found, false otherwise.
+ */
+export async function validateLocation(address: string, zipCode: string): Promise<boolean> {
+  const query = encodeURIComponent(`${address}, ${zipCode}`);
+  const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`;
+  try {
+    const res = await fetch(url, {
+      headers: { "Accept-Language": "en", "User-Agent": "AICoachApp/1.0" },
+    });
+    if (!res.ok) return true; // fail open if the geocoding service is down
+    const results = await res.json();
+    return Array.isArray(results) && results.length > 0;
+  } catch {
+    return true; // fail open on network error
+  }
+}
+
 export async function createLead(data: {
   name: string;
   address: string;
