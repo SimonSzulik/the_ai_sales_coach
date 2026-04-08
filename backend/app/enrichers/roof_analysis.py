@@ -7,7 +7,6 @@ import logging
 import os
 from pathlib import Path
 
-from app.config import get_settings
 from app.models import Confidence, EnrichmentResult
 
 logger = logging.getLogger(__name__)
@@ -21,14 +20,11 @@ def _run_analysis(address: str, zip_code: str, lead_id: str) -> dict:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
     from roof_analyzer.main import analyze_address
 
-    settings = get_settings()
-    api_key = settings.google_maps_api_key
-
     full_address = f"{address}, {zip_code}, Germany"
     out_dir = str(ROOF_OUTPUTS_DIR / lead_id)
     os.makedirs(out_dir, exist_ok=True)
 
-    result = analyze_address(full_address, api_key, out_dir=out_dir)
+    result = analyze_address(full_address, out_dir=out_dir)
 
     result.pop("preview", None)
     result.pop("preview_3d", None)
@@ -38,14 +34,19 @@ def _run_analysis(address: str, zip_code: str, lead_id: str) -> dict:
 
 
 async def enrich_roof(address: str, zip_code: str, lead_id: str) -> EnrichmentResult:
-    settings = get_settings()
-    if not settings.google_maps_api_key:
+    import sys
+
+    root = Path(__file__).resolve().parent.parent.parent.parent
+    sys.path.insert(0, str(root))
+    from roof_analyzer.main import get_google_maps_api_key
+
+    if not get_google_maps_api_key():
         logger.warning("GOOGLE_MAPS_API_KEY not set — skipping roof analysis")
         return EnrichmentResult(
             source="roof_analyzer",
             confidence=Confidence.NONE,
             fallback_used=True,
-            data={"error": "GOOGLE_MAPS_API_KEY not configured"},
+            data={"error": "GOOGLE_MAPS_API_KEY not configured (add to project .env)"},
         )
 
     try:
