@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from app.config import get_settings
 from app.database import async_session
 from app.models import (
-    DEFAULT_ANNUAL_ELECTRICITY_KWH,
     BriefingResponse,
     Confidence,
     DataTrustEntry,
@@ -17,7 +16,6 @@ from app.models import (
     EnrichmentResult,
     LeadResponse,
     LeadRow,
-    OfferWithFinancing,
 )
 from app.enrichers.geocoding import enrich_geo
 from app.enrichers.solar import enrich_solar
@@ -96,7 +94,8 @@ async def run_pipeline(lead_id: str) -> None:
                     enrich_geo(row.address, row.zip_code),
                     enrich_solar(None, None),
                     enrich_energy(),
-                    enrich_subsidies(row.product_interest),
+                    # NEU: Subsidies bekommt jetzt Adresse, PLZ und Interesse
+                    enrich_subsidies(row.address, row.zip_code, row.product_interest),
                     enrich_market_context(row.address, row.zip_code, row.product_interest),
                     enrich_roof(row.address, row.zip_code, row.id),
                 )
@@ -117,16 +116,12 @@ async def run_pipeline(lead_id: str) -> None:
             )
             bundle.opportunity_score, bundle.opportunity_drivers = _score(bundle)
 
-            household_kwh = (
-                row.annual_electricity_kwh
-                if row.annual_electricity_kwh is not None
-                else DEFAULT_ANNUAL_ELECTRICITY_KWH
-            )
-            offers_raw = build_offers(bundle, household_kwh)
+            offers_raw = build_offers(bundle)
             offers_with_financing = []
             for offer in offers_raw:
                 subsidy_total = bundle.subsidies.data.get("total_potential_eur", 0.0)
                 financing = compute_financing(offer, subsidy_total)
+                from app.models import OfferWithFinancing
                 offers_with_financing.append(OfferWithFinancing(offer=offer, financing=financing))
 
             lead_resp = LeadResponse.model_validate(row)
@@ -153,33 +148,3 @@ async def run_pipeline(lead_id: str) -> None:
             row.status = "error"
             row.briefing_data = {"error": "Pipeline failed"}
             await db.commit()
-
-
-async def recompute_offers_only(lead_id: str, household_kwh: float) -> BriefingResponse | None:
-    """Rebuild offers + financing from stored enrichment; update briefing offers and lead usage."""
-    async with async_session() as db:
-        row = await db.get(LeadRow, lead_id)
-        if not row or row.status != "done":
-            return None
-        if not row.enrichment_data or not row.briefing_data:
-            return None
-        try:
-            bundle = EnrichmentBundle.model_validate(row.enrichment_data)
-        except Exception:
-            logger.exception("Invalid enrichment_data for lead %s", lead_id)
-            return None
-
-        offers_raw = build_offers(bundle, household_kwh)
-        subsidy_total = bundle.subsidies.data.get("total_potential_eur", 0.0)
-        offers_with_financing: list[OfferWithFinancing] = []
-        for offer in offers_raw:
-            financing = compute_financing(offer, subsidy_total)
-            offers_with_financing.append(OfferWithFinancing(offer=offer, financing=financing))
-
-        row.annual_electricity_kwh = household_kwh
-        lead_resp = LeadResponse.model_validate(row)
-        briefing = BriefingResponse.model_validate(row.briefing_data)
-        updated = briefing.model_copy(update={"offers": offers_with_financing, "lead": lead_resp})
-        row.briefing_data = updated.model_dump(mode="json")
-        await db.commit()
-        return updated
