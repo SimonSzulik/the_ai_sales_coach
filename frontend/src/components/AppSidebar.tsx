@@ -6,12 +6,6 @@ import { useState } from "react";
 import { useDashboard, type Section } from "@/components/DashboardContext";
 import { Badge } from "@/components/ui/badge";
 
-interface Source {
-  title: string;
-  url: string;
-  type: string;
-}
-
 const sectionItems: { id: Section; label: string; icon: React.ReactNode }[] = [
   {
     id: "overview",
@@ -41,20 +35,20 @@ const sectionItems: { id: Section; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
+    id: "roof",
+    label: "Roof Analysis",
+    icon: (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+    ),
+  },
+  {
     id: "offers",
     label: "Offers",
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
-    ),
-  },
-  {
-    id: "objections",
-    label: "Objections",
-    icon: (
-      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
       </svg>
     ),
   },
@@ -78,60 +72,10 @@ const sectionItems: { id: Section; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-function sourceIcon(type: string) {
-  if (type === "subsidy" || type === "program") {
-    return (
-      <svg className="w-3.5 h-3.5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    );
-  }
-  if (type === "regulation") {
-    return (
-      <svg className="w-3.5 h-3.5 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
-      </svg>
-    );
-  }
-  if (type === "utility") {
-    return (
-      <svg className="w-3.5 h-3.5 text-yellow-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
-    );
-  }
-  return (
-    <svg className="w-3.5 h-3.5 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-    </svg>
-  );
-}
-
 export default function AppSidebar() {
   const params = useParams<{ id: string }>();
-  const { activeSection, setActiveSection, briefing, leads } = useDashboard();
-  const [docsOpen, setDocsOpen] = useState(true);
+  const { activeSection, setActiveSection, leads } = useDashboard();
   const [leadsOpen, setLeadsOpen] = useState(true);
-
-  const mc = (briefing as Record<string, unknown>)?.enrichment as Record<string, unknown> | undefined;
-  const marketData = (mc?.market_context as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
-  const sources: Source[] = (marketData?.sources as Source[]) ?? [];
-  const dataTrust = (briefing as Record<string, unknown>)?.data_trust as { enricher: string; source: string }[] | undefined;
-  const municipalPrograms = (marketData?.municipal_programs as { name: string; provider: string }[]) ?? [];
-
-  const allDocs: { title: string; url?: string; type: string }[] = [
-    ...sources,
-    ...(dataTrust ?? []).map((dt) => ({
-      title: `${dt.enricher} (${dt.source})`,
-      type: "data",
-    })),
-    ...municipalPrograms
-      .filter((p) => !sources.some((s) => s.title.includes(p.name)))
-      .map((p) => ({
-        title: `${p.name} — ${p.provider}`,
-        type: "program",
-      })),
-  ];
 
   return (
     <aside className="hidden md:flex flex-col w-60 bg-white border-r border-border shrink-0 sticky top-0 h-screen overflow-y-auto">
@@ -180,57 +124,6 @@ export default function AppSidebar() {
             );
           })}
         </nav>
-      </div>
-
-      {/* Documents */}
-      <div className="px-2 py-1 border-t">
-        <button
-          onClick={() => setDocsOpen(!docsOpen)}
-          className="w-full flex items-center justify-between px-2 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-        >
-          <span className="flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Documents
-            {allDocs.length > 0 && (
-              <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4">{allDocs.length}</Badge>
-            )}
-          </span>
-          <svg className={`w-3 h-3 transition-transform ${docsOpen ? "rotate-0" : "-rotate-90"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        {docsOpen && (
-          <div className="space-y-0.5 px-1 pb-2 max-h-48 overflow-y-auto">
-            {allDocs.length === 0 ? (
-              <p className="text-xs text-muted-foreground px-2 py-1">
-                {briefing ? "No documents found" : "Loading..."}
-              </p>
-            ) : (
-              allDocs.map((doc, i) => (
-                <div key={i} className="flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors">
-                  {sourceIcon(doc.type)}
-                  {doc.url ? (
-                    <a
-                      href={doc.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:underline leading-tight truncate"
-                      title={doc.title}
-                    >
-                      {doc.title}
-                    </a>
-                  ) : (
-                    <span className="text-xs text-muted-foreground leading-tight truncate" title={doc.title}>
-                      {doc.title}
-                    </span>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        )}
       </div>
 
       {/* Leads */}

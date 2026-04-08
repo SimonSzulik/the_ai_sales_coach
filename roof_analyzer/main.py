@@ -125,10 +125,33 @@ def analyze_address(address: str, api_key: str, out_dir: str = ".") -> dict:
     return result
 
 
+def _load_dotenv(path: str = ".env") -> None:
+    """Load KEY=VALUE pairs from a .env file into os.environ (no 'export' needed)."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", path)
+    if not os.path.isfile(env_path):
+        env_path = os.path.join(os.getcwd(), path)
+    if not os.path.isfile(env_path):
+        return
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):]
+            key_val = line.split("=", 1)
+            if len(key_val) != 2:
+                continue
+            k, v = key_val[0].strip(), key_val[1].strip()
+            v = v.strip("\"'")
+            os.environ.setdefault(k, v)
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python -m roof_analyzer.main 'Adresse'")
         sys.exit(1)
+    _load_dotenv()
     key = os.environ.get("GOOGLE_MAPS_API_KEY")
     if not key:
         print("Bitte GOOGLE_MAPS_API_KEY setzen.")

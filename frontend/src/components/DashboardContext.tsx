@@ -6,8 +6,8 @@ export type Section =
   | "overview"
   | "preresearch"
   | "checklist"
+  | "roof"
   | "offers"
-  | "objections"
   | "market"
   | "assistant";
 

@@ -87,26 +87,20 @@ async def run_pipeline(lead_id: str) -> None:
         await db.commit()
 
         try:
-            geo_result, solar_result, energy_result, subsidy_result = await asyncio.gather(
-                enrich_geo(row.address, row.zip_code),
-                enrich_solar(None, None),  # will be updated after geo
-                enrich_energy(),
-                enrich_subsidies(row.product_interest),
+            geo_result, solar_result, energy_result, subsidy_result, market_ctx_result = (
+                await asyncio.gather(
+                    enrich_geo(row.address, row.zip_code),
+                    enrich_solar(None, None),
+                    enrich_energy(),
+                    enrich_subsidies(row.product_interest),
+                    enrich_market_context(row.address, row.zip_code, row.product_interest),
+                )
             )
 
-            # Re-run solar with actual coordinates and run market context in parallel
             lat = geo_result.data.get("latitude")
             lon = geo_result.data.get("longitude")
-            city = geo_result.data.get("city", "")
             if lat and lon:
-                solar_result, market_ctx_result = await asyncio.gather(
-                    enrich_solar(lat, lon),
-                    enrich_market_context(row.address, row.zip_code, city, row.product_interest),
-                )
-            else:
-                market_ctx_result = await enrich_market_context(
-                    row.address, row.zip_code, city, row.product_interest,
-                )
+                solar_result = await enrich_solar(lat, lon)
 
             bundle = EnrichmentBundle(
                 geo=geo_result,
