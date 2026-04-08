@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["qhack.mehdy.eu"],
   async rewrites() {
     return [
       {
