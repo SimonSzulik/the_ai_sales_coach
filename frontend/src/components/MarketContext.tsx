@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip } from "@base-ui/react/tooltip";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 interface Source {
   source_url?: string | null;
@@ -61,31 +62,33 @@ function Val({ v }: { v: string | number | undefined | null }) {
 }
 
 function InfoButton({ url, title }: { url?: string | null; title?: string | null }) {
-  const [open, setOpen] = useState(false);
   if (!url) return null;
   return (
-    <span className="relative inline-block ml-1.5">
-      <button
-        onClick={() => setOpen(!open)}
-        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-muted text-muted-foreground hover:bg-blue-100 hover:text-blue-600 transition-colors text-[9px] font-bold leading-none"
-        title="View source"
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        type="button"
+        delay={200}
+        className="inline-flex items-center justify-center w-4 h-4 ml-1.5 rounded-full bg-muted text-muted-foreground hover:bg-blue-100 hover:text-blue-600 transition-colors text-[9px] font-bold leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="View source"
       >
         i
-      </button>
-      {open && (
-        <div className="absolute z-50 left-0 top-5 w-56 rounded-lg border bg-popover p-2 shadow-md text-xs">
-          <p className="font-medium truncate mb-1">{title || "Source"}</p>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline break-all"
-          >
-            {url}
-          </a>
-        </div>
-      )}
-    </span>
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner side="top" sideOffset={8} align="start">
+          <Tooltip.Popup className="z-50 w-56 max-w-[min(18rem,calc(100vw-1.5rem))] rounded-md border bg-popover px-3 py-2 text-left text-xs text-popover-foreground shadow-md leading-relaxed">
+            <p className="font-medium truncate mb-1">{title || "Source"}</p>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline break-all"
+            >
+              {url}
+            </a>
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   );
 }
 
@@ -109,6 +112,7 @@ export default function MarketContext({ data }: Props) {
   const whyNow = data.why_now ?? data.why_now_triggers ?? [];
 
   return (
+    <TooltipProvider>
     <div className="space-y-4 mt-4">
       {/* Row 1: Building Profile + Energy Prices */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -311,5 +315,6 @@ export default function MarketContext({ data }: Props) {
         </Card>
       )}
     </div>
+    </TooltipProvider>
   );
 }
