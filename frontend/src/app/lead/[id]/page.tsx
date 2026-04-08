@@ -4,13 +4,16 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { getBriefing } from "@/lib/api";
-import LeadSnapshot from "@/components/LeadSnapshot";
-import OpportunityScore from "@/components/OpportunityScore";
+import DashboardHeader from "@/components/DashboardHeader";
+import OverviewTab from "@/components/OverviewTab";
+import OfferCards from "@/components/OfferCards";
 import OfferComparison from "@/components/OfferComparison";
 import FinancingTable from "@/components/FinancingTable";
-import SalesCoach from "@/components/SalesCoach";
+import MarketContext from "@/components/MarketContext";
 import DataTrust from "@/components/DataTrust";
+import SalesCoach from "@/components/SalesCoach";
 
 type Briefing = {
   lead: { name: string; address: string; zip_code: string; product_interest?: string };
@@ -19,6 +22,7 @@ type Briefing = {
     solar: { confidence: string; data: Record<string, unknown> };
     energy: { confidence: string; data: Record<string, unknown> };
     subsidies: { confidence: string; data: Record<string, unknown> };
+    market_context: { confidence: string; data: Record<string, unknown> };
     opportunity_score: number;
     opportunity_drivers: string[];
   };
@@ -26,6 +30,7 @@ type Briefing = {
     offer: {
       tier: string;
       label: string;
+      rationale: string;
       components: { name: string; description: string; unit_cost_eur: number }[];
       capex_eur: number;
       annual_savings_eur: number;
@@ -115,43 +120,74 @@ export default function BriefingPage() {
             Researching location, solar potential, energy prices, and subsidies
           </p>
         </div>
-        <div className="w-full max-w-4xl grid gap-4 md:grid-cols-2">
-          <Skeleton className="h-48 rounded-lg" />
-          <Skeleton className="h-48 rounded-lg" />
-          <Skeleton className="h-32 rounded-lg col-span-full" />
-          <Skeleton className="h-32 rounded-lg col-span-full" />
+        <div className="w-full max-w-5xl grid gap-4 md:grid-cols-3">
+          <Skeleton className="h-48 rounded-2xl" />
+          <Skeleton className="h-48 rounded-2xl" />
+          <Skeleton className="h-48 rounded-2xl" />
+          <Skeleton className="h-32 rounded-xl col-span-full" />
+          <Skeleton className="h-32 rounded-xl col-span-full" />
         </div>
       </main>
     );
   }
 
-  return (
-    <main className="flex flex-1 flex-col p-4 md:p-8 max-w-6xl mx-auto w-full">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Sales Briefing</h1>
-          <p className="text-sm text-muted-foreground">
-            Prepared for {briefing.lead.name} &middot; {briefing.lead.zip_code}
-          </p>
-        </div>
-        <Link href="/" className="inline-flex items-center justify-center rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted">
-          New Lead
-        </Link>
-      </div>
+  const e = briefing.enrichment;
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <LeadSnapshot lead={briefing.lead} geo={briefing.enrichment.geo as never} />
-        <OpportunityScore
-          score={briefing.enrichment.opportunity_score}
-          drivers={briefing.enrichment.opportunity_drivers}
-        />
-        <OfferComparison offers={briefing.offers} />
-        <FinancingTable offers={briefing.offers} />
-        <SalesCoach coach={briefing.coach} />
-        <div className="md:col-span-2">
-          <DataTrust entries={briefing.data_trust} />
-        </div>
-      </div>
+  return (
+    <main className="flex flex-1 flex-col p-4 md:p-8 max-w-7xl mx-auto w-full">
+      <DashboardHeader
+        name={briefing.lead.name}
+        address={briefing.lead.address}
+        zipCode={briefing.lead.zip_code}
+        city={e.geo.data.city as string | undefined}
+        productInterest={briefing.lead.product_interest ?? undefined}
+        score={e.opportunity_score}
+        drivers={e.opportunity_drivers}
+        confidenceDisclaimer={briefing.coach.confidence_disclaimer}
+      />
+
+      <Tabs defaultValue="offers">
+        <TabsList variant="line" className="w-full justify-start border-b pb-0 mb-6">
+          <TabsTrigger value="overview" className="text-sm px-4 py-2">Overview</TabsTrigger>
+          <TabsTrigger value="offers" className="text-sm px-4 py-2">Offers</TabsTrigger>
+          <TabsTrigger value="market" className="text-sm px-4 py-2">Market Research</TabsTrigger>
+          <TabsTrigger value="coach" className="text-sm px-4 py-2">Sales Coach</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <OverviewTab
+            lead={briefing.lead}
+            geo={e.geo}
+            solar={e.solar}
+            energy={e.energy}
+            subsidies={e.subsidies}
+            marketContext={e.market_context}
+            score={e.opportunity_score}
+            drivers={e.opportunity_drivers}
+          />
+        </TabsContent>
+
+        <TabsContent value="offers">
+          <div className="space-y-6 mt-4">
+            <OfferCards offers={briefing.offers} />
+            <OfferComparison offers={briefing.offers} />
+            <FinancingTable offers={briefing.offers} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="market">
+          <div className="space-y-4 mt-4">
+            <MarketContext data={e.market_context.data as never} />
+            <DataTrust entries={briefing.data_trust} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="coach">
+          <div className="mt-4">
+            <SalesCoach coach={briefing.coach} />
+          </div>
+        </TabsContent>
+      </Tabs>
     </main>
   );
 }

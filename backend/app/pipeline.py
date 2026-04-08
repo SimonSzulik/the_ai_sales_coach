@@ -21,6 +21,7 @@ from app.enrichers.geocoding import enrich_geo
 from app.enrichers.solar import enrich_solar
 from app.enrichers.energy_prices import enrich_energy
 from app.enrichers.subsidies import enrich_subsidies
+from app.enrichers.market_context import enrich_market_context
 from app.engine.offers import build_offers
 from app.engine.financing import compute_financing
 from app.coach.sales_coach import generate_coaching
@@ -62,6 +63,7 @@ def _build_trust(bundle: EnrichmentBundle) -> list[DataTrustEntry]:
         ("Solar Potential", bundle.solar),
         ("Energy Prices", bundle.energy),
         ("Subsidies", bundle.subsidies),
+        ("Market Context", bundle.market_context),
     ]:
         entries.append(DataTrustEntry(
             enricher=enricher_name,
@@ -92,17 +94,26 @@ async def run_pipeline(lead_id: str) -> None:
                 enrich_subsidies(row.product_interest),
             )
 
-            # Re-run solar with actual coordinates if geo succeeded
+            # Re-run solar with actual coordinates and run market context in parallel
             lat = geo_result.data.get("latitude")
             lon = geo_result.data.get("longitude")
+            city = geo_result.data.get("city", "")
             if lat and lon:
-                solar_result = await enrich_solar(lat, lon)
+                solar_result, market_ctx_result = await asyncio.gather(
+                    enrich_solar(lat, lon),
+                    enrich_market_context(row.address, row.zip_code, city, row.product_interest),
+                )
+            else:
+                market_ctx_result = await enrich_market_context(
+                    row.address, row.zip_code, city, row.product_interest,
+                )
 
             bundle = EnrichmentBundle(
                 geo=geo_result,
                 solar=solar_result,
                 energy=energy_result,
                 subsidies=subsidy_result,
+                market_context=market_ctx_result,
             )
             bundle.opportunity_score, bundle.opportunity_drivers = _score(bundle)
 

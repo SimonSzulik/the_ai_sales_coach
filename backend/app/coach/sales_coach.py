@@ -60,6 +60,7 @@ def _build_context(
         "solar_potential": enrichment.solar.data,
         "energy_prices": enrichment.energy.data,
         "subsidies": enrichment.subsidies.data,
+        "market_context": enrichment.market_context.data,
         "opportunity_score": enrichment.opportunity_score,
         "opportunity_drivers": enrichment.opportunity_drivers,
         "offers": [
@@ -79,6 +80,7 @@ def _build_context(
             "solar": enrichment.solar.confidence.value,
             "energy": enrichment.energy.confidence.value,
             "subsidies": enrichment.subsidies.confidence.value,
+            "market_context": enrichment.market_context.confidence.value,
         },
     }
     return json.dumps(ctx, indent=2, default=str)

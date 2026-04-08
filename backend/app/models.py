@@ -120,6 +120,7 @@ class EnrichmentBundle(BaseModel):
     solar: EnrichmentResult = Field(default_factory=lambda: EnrichmentResult(source="pvgis"))
     energy: EnrichmentResult = Field(default_factory=lambda: EnrichmentResult(source="smard"))
     subsidies: EnrichmentResult = Field(default_factory=lambda: EnrichmentResult(source="kfw_bafa"))
+    market_context: EnrichmentResult = Field(default_factory=lambda: EnrichmentResult(source="market_context_ai"))
     opportunity_score: float = 0.0
     opportunity_drivers: list[str] = Field(default_factory=list)
 
@@ -144,6 +145,7 @@ class OfferComponent(BaseModel):
 class Offer(BaseModel):
     tier: OfferTier
     label: str
+    rationale: str = ""
     components: list[OfferComponent] = Field(default_factory=list)
     capex_eur: float = 0.0
     annual_savings_eur: float = 0.0
