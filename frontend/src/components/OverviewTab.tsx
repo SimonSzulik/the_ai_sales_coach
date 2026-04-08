@@ -164,7 +164,7 @@ export default function OverviewTab({
                     {ep.local_retail_eur_kwh ? ` — ${fmt(Number(ep.local_retail_eur_kwh))} EUR/kWh` : ""}
                   </span>
                 </div>
-                {subsidyData.total_potential_eur && Number(subsidyData.total_potential_eur) > 0 && (
+                {!!subsidyData.total_potential_eur && Number(subsidyData.total_potential_eur) > 0 && (
                   <div className="flex items-center gap-2">
                     <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -174,7 +174,7 @@ export default function OverviewTab({
                     </span>
                   </div>
                 )}
-                {energyData.retail_price_eur_kwh && Number(energyData.retail_price_eur_kwh) > 0.30 && (
+                {!!energyData.retail_price_eur_kwh && Number(energyData.retail_price_eur_kwh) > 0.30 && (
                   <div className="flex items-center gap-2">
                     <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -201,12 +201,12 @@ export default function OverviewTab({
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Tilt</span>
-                    <span className="font-medium">{solarData.optimal_angle}°</span>
+                    <span className="font-medium">{String(solarData.optimal_angle)}°</span>
                   </div>
                   {solarData.optimal_azimuth != null && (
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">Orientation</span>
-                      <span className="font-medium">{solarData.optimal_azimuth}°</span>
+                      <span className="font-medium">{String(solarData.optimal_azimuth)}°</span>
                     </div>
                   )}
                 </div>

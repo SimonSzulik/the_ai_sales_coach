@@ -121,6 +121,7 @@ class EnrichmentBundle(BaseModel):
     energy: EnrichmentResult = Field(default_factory=lambda: EnrichmentResult(source="smard"))
     subsidies: EnrichmentResult = Field(default_factory=lambda: EnrichmentResult(source="kfw_bafa"))
     market_context: EnrichmentResult = Field(default_factory=lambda: EnrichmentResult(source="market_context_ai"))
+    roof_analysis: EnrichmentResult = Field(default_factory=lambda: EnrichmentResult(source="roof_analyzer"))
     opportunity_score: float = 0.0
     opportunity_drivers: list[str] = Field(default_factory=list)
 
@@ -151,6 +152,14 @@ class Offer(BaseModel):
     annual_savings_eur: float = 0.0
     payback_years: float = 0.0
     co2_saved_kg: float = 0.0
+    self_consumption_pct: float = 0.0
+    annual_production_kwh: float = 0.0
+    roof_utilization_pct: float = 0.0
+    system_kwp: float = 0.0
+    battery_kwh: float = 0.0
+    retail_price_eur_kwh: float = 0.35
+    feed_in_tariff_eur: float = 0.081
+    has_heat_pump: bool = False
 
 
 class FinancingScenario(BaseModel):

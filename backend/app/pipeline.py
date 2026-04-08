@@ -22,6 +22,7 @@ from app.enrichers.solar import enrich_solar
 from app.enrichers.energy_prices import enrich_energy
 from app.enrichers.subsidies import enrich_subsidies
 from app.enrichers.market_context import enrich_market_context
+from app.enrichers.roof_analysis import enrich_roof
 from app.engine.offers import build_offers
 from app.engine.financing import compute_financing
 from app.coach.sales_coach import generate_coaching
@@ -64,6 +65,7 @@ def _build_trust(bundle: EnrichmentBundle) -> list[DataTrustEntry]:
         ("Energy Prices", bundle.energy),
         ("Subsidies", bundle.subsidies),
         ("Market Context", bundle.market_context),
+        ("Roof Analysis", bundle.roof_analysis),
     ]:
         entries.append(DataTrustEntry(
             enricher=enricher_name,
@@ -87,13 +89,14 @@ async def run_pipeline(lead_id: str) -> None:
         await db.commit()
 
         try:
-            geo_result, solar_result, energy_result, subsidy_result, market_ctx_result = (
+            geo_result, solar_result, energy_result, subsidy_result, market_ctx_result, roof_result = (
                 await asyncio.gather(
                     enrich_geo(row.address, row.zip_code),
                     enrich_solar(None, None),
                     enrich_energy(),
                     enrich_subsidies(row.product_interest),
                     enrich_market_context(row.address, row.zip_code, row.product_interest),
+                    enrich_roof(row.address, row.zip_code, row.id),
                 )
             )
 
@@ -108,6 +111,7 @@ async def run_pipeline(lead_id: str) -> None:
                 energy=energy_result,
                 subsidies=subsidy_result,
                 market_context=market_ctx_result,
+                roof_analysis=roof_result,
             )
             bundle.opportunity_score, bundle.opportunity_drivers = _score(bundle)
 

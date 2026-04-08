@@ -4,6 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     anthropic_api_key: str = ""
+    google_maps_api_key: str = ""
     database_url: str = "sqlite+aiosqlite:///./sales_coach.db"
     redis_url: str = "redis://localhost:6379/0"
     backend_port: int = 8000

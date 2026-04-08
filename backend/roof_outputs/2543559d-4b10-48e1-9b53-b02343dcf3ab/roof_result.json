@@ -1,0 +1,31 @@
+{
+  "address": "Schloßpl. 1, 70173 Stuttgart, Germany",
+  "lat": 48.7776629,
+  "lon": 9.180334499999999,
+  "location_type": "ROOFTOP",
+  "total_roof_area_m2": 94.84,
+  "total_estimated_kwp": 17.07,
+  "planes": [
+    {
+      "cluster_id": 1,
+      "area_m2": 77.3,
+      "tilt_deg": 32.0,
+      "azimuth_deg": 203.2,
+      "suitability": "high",
+      "estimated_kwp": 13.91,
+      "triangle_count": 3
+    },
+    {
+      "cluster_id": 0,
+      "area_m2": 17.54,
+      "tilt_deg": 0.1,
+      "azimuth_deg": 7.6,
+      "suitability": "high",
+      "estimated_kwp": 3.16,
+      "triangle_count": 25
+    }
+  ],
+  "preview": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/2543559d-4b10-48e1-9b53-b02343dcf3ab/roof_topdown.png",
+  "preview_3d": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/2543559d-4b10-48e1-9b53-b02343dcf3ab/roof_preview_3d.html",
+  "compare_maps": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/2543559d-4b10-48e1-9b53-b02343dcf3ab/roof_vs_maps.png"
+}
