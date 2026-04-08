@@ -1,0 +1,58 @@
+{
+  "address": "Pariser Platz, 10117 Berlin, Germany",
+  "lat": 52.5162746,
+  "lon": 13.377704,
+  "location_type": "GEOMETRIC_CENTER",
+  "total_roof_area_m2": 3549.24,
+  "total_estimated_kwp": 638.86,
+  "planes": [
+    {
+      "cluster_id": 0,
+      "area_m2": 3470.19,
+      "tilt_deg": 0.7,
+      "azimuth_deg": 267.6,
+      "suitability": "high",
+      "estimated_kwp": 624.63,
+      "triangle_count": 697
+    },
+    {
+      "cluster_id": 2,
+      "area_m2": 28.84,
+      "tilt_deg": 25.8,
+      "azimuth_deg": 172.2,
+      "suitability": "high",
+      "estimated_kwp": 5.19,
+      "triangle_count": 5
+    },
+    {
+      "cluster_id": 3,
+      "area_m2": 25.95,
+      "tilt_deg": 45.1,
+      "azimuth_deg": 180.0,
+      "suitability": "high",
+      "estimated_kwp": 4.67,
+      "triangle_count": 18
+    },
+    {
+      "cluster_id": 1,
+      "area_m2": 17.87,
+      "tilt_deg": 43.4,
+      "azimuth_deg": 353.5,
+      "suitability": "low",
+      "estimated_kwp": 3.22,
+      "triangle_count": 6
+    },
+    {
+      "cluster_id": 4,
+      "area_m2": 6.39,
+      "tilt_deg": 45.1,
+      "azimuth_deg": 0.0,
+      "suitability": "low",
+      "estimated_kwp": 1.15,
+      "triangle_count": 10
+    }
+  ],
+  "preview": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/5dfff3c6-0286-44d5-94a1-3fdb065244d5/roof_topdown.png",
+  "preview_3d": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/5dfff3c6-0286-44d5-94a1-3fdb065244d5/roof_preview_3d.html",
+  "compare_maps": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/5dfff3c6-0286-44d5-94a1-3fdb065244d5/roof_vs_maps.png"
+}
