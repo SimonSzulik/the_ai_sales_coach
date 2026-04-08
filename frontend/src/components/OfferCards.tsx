@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { InfoTooltip } from "@/components/ui/tooltip";
@@ -12,6 +12,7 @@ import {
   recalcSavings,
 } from "@/lib/buildOfferTooltips";
 import { CO2_KG_PER_KWH_GRID, FEED_IN_TARIFF_EUR, HOUSEHOLD_DEFAULT_KWH } from "@/lib/offerCalcConstants";
+import { recomputeOffers } from "@/lib/api";
 
 interface Financing {
   type: string;
@@ -46,9 +47,16 @@ interface Props {
   name: string;
   onShowFinancing?: () => void;
   enrichment?: EnrichmentInput;
+  /** Lead id for persisting usage-driven offer recomputation */
+  leadId: string;
+  /** Initial / server-saved annual kWh (from briefing lead) */
+  leadAnnualKwh?: number | null;
+  /** Called after POST recompute-offers succeeds with full briefing payload */
+  onBriefingSynced?: (briefing: unknown) => void;
 }
 
 const DEFAULT_HOUSEHOLD = HOUSEHOLD_DEFAULT_KWH;
+const RECOMPUTE_DEBOUNCE_MS = 600;
 
 function fmt(n: number) {
   return new Intl.NumberFormat("de-DE", {
@@ -133,9 +141,58 @@ const tierConfig: Record<string, { badge1: string; badge2: string; badge1Variant
   premium: { badge1: "PREMIUM", badge2: "Long-term", badge1Variant: "outline", badge2Variant: "secondary" },
 };
 
-export default function OfferCards({ offers, name, onShowFinancing, enrichment }: Props) {
+export default function OfferCards({
+  offers,
+  name,
+  onShowFinancing,
+  enrichment,
+  leadId,
+  leadAnnualKwh,
+  onBriefingSynced,
+}: Props) {
   const firstName = name.split(" ")[0];
-  const [household, setHousehold] = useState(DEFAULT_HOUSEHOLD);
+  const [household, setHousehold] = useState(() => leadAnnualKwh ?? DEFAULT_HOUSEHOLD);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastServerKwh = useRef<number | null>(null);
+  /** Once the user moves the slider, do not overwrite local value from delayed briefing load. */
+  const userAdjustedSlider = useRef(false);
+
+  useEffect(() => {
+    if (leadAnnualKwh == null) return;
+    if (userAdjustedSlider.current) return;
+    setHousehold(leadAnnualKwh);
+    lastServerKwh.current = leadAnnualKwh;
+  }, [leadAnnualKwh]);
+
+  const scheduleServerSync = useCallback(
+    (kwh: number) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(async () => {
+        debounceRef.current = null;
+        setSyncBusy(true);
+        setSyncError(null);
+        try {
+          const briefing = await recomputeOffers(leadId, kwh);
+          lastServerKwh.current = kwh;
+          onBriefingSynced?.(briefing);
+        } catch (e: unknown) {
+          setSyncError(e instanceof Error ? e.message : "Could not sync usage to server");
+        } finally {
+          setSyncBusy(false);
+        }
+      }, RECOMPUTE_DEBOUNCE_MS);
+    },
+    [leadId, onBriefingSynced],
+  );
+
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    },
+    [],
+  );
 
   const exampleOfferIndex = useMemo(() => {
     const i = offers.findIndex(({ offer: o }) => o.tier === "recommended");
@@ -226,7 +283,9 @@ export default function OfferCards({ offers, name, onShowFinancing, enrichment }
           value={[household]}
           onValueChange={(v) => {
             const val = Array.isArray(v) ? v[0] : v;
+            userAdjustedSlider.current = true;
             setHousehold(val);
+            scheduleServerSync(val);
           }}
         />
         <div className="flex justify-between text-[11px] text-muted-foreground">
@@ -234,14 +293,23 @@ export default function OfferCards({ offers, name, onShowFinancing, enrichment }
           <span>4,000 kWh (avg.)</span>
           <span>12,000 kWh (large home)</span>
         </div>
-        {household !== DEFAULT_HOUSEHOLD && (
-          <button
-            className="text-xs text-blue-600 hover:underline font-medium"
-            onClick={() => setHousehold(DEFAULT_HOUSEHOLD)}
-          >
-            Reset to default (4,000 kWh)
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {household !== DEFAULT_HOUSEHOLD && (
+            <button
+              type="button"
+              className="text-xs text-blue-600 hover:underline font-medium"
+              onClick={() => {
+                userAdjustedSlider.current = true;
+                setHousehold(DEFAULT_HOUSEHOLD);
+                scheduleServerSync(DEFAULT_HOUSEHOLD);
+              }}
+            >
+              Reset to default (4,000 kWh)
+            </button>
+          )}
+          {syncBusy && <span className="text-xs text-muted-foreground">Updating…</span>}
+          {syncError && <span className="text-xs text-destructive">{syncError}</span>}
+        </div>
       </div>
 
       <div className="grid gap-5 md:grid-cols-3">

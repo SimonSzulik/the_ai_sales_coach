@@ -72,6 +72,7 @@ export async function createLead(data: {
   address: string;
   zip_code: string;
   product_interest?: string;
+  annual_electricity_kwh?: number;
 }) {
   const res = await fetch(`${API_BASE}/api/lead`, {
     method: "POST",
@@ -98,5 +99,18 @@ export async function getBriefing(id: string) {
 export async function getLeads() {
   const res = await fetch(`${API_BASE}/api/leads`);
   if (!res.ok) throw new Error(`Failed to fetch leads: ${res.status}`);
+  return res.json();
+}
+
+export async function recomputeOffers(leadId: string, annual_electricity_kwh: number) {
+  const res = await fetch(`${API_BASE}/api/lead/${leadId}/recompute-offers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ annual_electricity_kwh }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Failed to recompute offers: ${res.status} ${detail}`);
+  }
   return res.json();
 }

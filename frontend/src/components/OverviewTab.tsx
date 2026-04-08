@@ -13,6 +13,8 @@ interface Props {
     zip_code: string;
     product_interest?: string;
   };
+  /** Annual kWh/yr driving offer economics (lead form + Offers tab usage slider); mirrors briefing. */
+  annualHouseholdKwh: number;
   geo: { confidence: string; data: Record<string, unknown> };
   solar: { confidence: string; data: Record<string, unknown> };
   energy: { confidence: string; data: Record<string, unknown> };
@@ -101,6 +103,7 @@ function InfoRow({ label, value }: { label: string; value: string | undefined | 
 
 export default function OverviewTab({
   lead,
+  annualHouseholdKwh,
   geo,
   solar,
   energy,
@@ -174,9 +177,16 @@ export default function OverviewTab({
           </p>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
-          Offers in this app use a default household model of{" "}
-          <strong className="text-foreground tabular-nums">{HOUSEHOLD_DEFAULT_KWH.toLocaleString("de-DE")} kWh/year</strong>
-          . Typical German household electricity use is often cited around{" "}
+          Offer economics for this lead use{" "}
+          <strong className="text-foreground tabular-nums">
+            {annualHouseholdKwh.toLocaleString("de-DE")} kWh/year
+          </strong>{" "}
+          as annual household electricity — set on the lead form and adjustable with the usage slider on the Offers tab
+          (saved to this briefing). Leaving usage blank on the form uses the{" "}
+          <strong className="text-foreground tabular-nums">
+            {HOUSEHOLD_DEFAULT_KWH.toLocaleString("de-DE")} kWh/year
+          </strong>{" "}
+          default until you change it. Typical German household electricity use is often cited around{" "}
           <strong className="text-foreground tabular-nums">
             ~{TYPICAL_DE_HOUSEHOLD_KWH_ILLUSTRATIVE.toLocaleString("de-DE")} kWh/year
           </strong>{" "}

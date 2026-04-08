@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getBriefing, getLeads } from "@/lib/api";
+import { HOUSEHOLD_DEFAULT_KWH } from "@/lib/offerCalcConstants";
 import { useDashboard } from "@/components/DashboardContext";
 import DashboardHeader from "@/components/DashboardHeader";
 import OverviewTab from "@/components/OverviewTab";
@@ -22,7 +23,13 @@ import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 type Briefing = {
-  lead: { name: string; address: string; zip_code: string; product_interest?: string };
+  lead: {
+    name: string;
+    address: string;
+    zip_code: string;
+    product_interest?: string;
+    annual_electricity_kwh?: number | null;
+  };
   enrichment: {
     geo: { confidence: string; data: Record<string, unknown> };
     solar: { confidence: string; data: Record<string, unknown> };
@@ -167,6 +174,7 @@ export default function BriefingPage() {
 
   const e = briefing.enrichment;
   const maxSubsidy = briefing.offers[0]?.financing[0]?.subsidy_deducted_eur ?? 0;
+  const leadAnnualKwh = briefing.lead.annual_electricity_kwh ?? HOUSEHOLD_DEFAULT_KWH;
 
   return (
     <main className="flex flex-1 flex-col p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
@@ -185,6 +193,7 @@ export default function BriefingPage() {
       {activeSection === "overview" && (
         <OverviewTab
           lead={briefing.lead}
+          annualHouseholdKwh={leadAnnualKwh}
           geo={e.geo}
           solar={e.solar}
           energy={e.energy}
@@ -208,15 +217,25 @@ export default function BriefingPage() {
         <TooltipProvider>
           <div className="space-y-8 mt-4">
             <OfferCards
+              leadId={id}
+              leadAnnualKwh={briefing.lead.annual_electricity_kwh ?? null}
               offers={briefing.offers}
               name={briefing.lead.name}
               onShowFinancing={handleShowFinancing}
               enrichment={briefing.enrichment}
+              onBriefingSynced={(data) => {
+                setBriefing(data as Briefing);
+                setCtxBriefing(data as Briefing);
+              }}
             />
 
             <div className="grid gap-5 lg:grid-cols-5">
               <div className="lg:col-span-3">
-                <CompareNumbers offers={briefing.offers} enrichment={briefing.enrichment} />
+                <CompareNumbers
+                  offers={briefing.offers}
+                  enrichment={briefing.enrichment}
+                  annualHouseholdKwh={leadAnnualKwh}
+                />
               </div>
               <div className="lg:col-span-2">
                 <FinancingInfo

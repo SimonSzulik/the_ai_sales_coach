@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { HOUSEHOLD_DEFAULT_KWH } from "@/lib/offerCalcConstants";
 import { createLead, validateLocation } from "@/lib/api";
 
 export default function LeadForm() {
@@ -21,11 +22,24 @@ export default function LeadForm() {
     setLocationError(false);
 
     const fd = new FormData(e.currentTarget);
+    const usageRaw = (fd.get("annual_electricity_kwh") as string)?.trim();
+    let annual_electricity_kwh: number | undefined;
+    if (usageRaw) {
+      const n = Number(usageRaw);
+      if (!Number.isFinite(n) || n < 1500 || n > 12000) {
+        setError("Annual electricity usage must be between 1,500 and 12,000 kWh.");
+        setLoading(false);
+        return;
+      }
+      annual_electricity_kwh = n;
+    }
+
     const payload = {
       name: fd.get("name") as string,
       address: fd.get("address") as string,
       zip_code: fd.get("zip_code") as string,
       product_interest: (fd.get("product_interest") as string) || undefined,
+      ...(annual_electricity_kwh != null ? { annual_electricity_kwh } : {}),
     };
 
     // Sanity-check: make sure the address resolves to a real location
@@ -88,6 +102,23 @@ export default function LeadForm() {
           <div className="grid gap-2">
             <Label htmlFor="product_interest">Product Interest (optional)</Label>
             <Input id="product_interest" name="product_interest" placeholder="Solar, Battery, Heat Pump, Wallbox" />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="annual_electricity_kwh">Annual electricity usage (optional)</Label>
+            <Input
+              id="annual_electricity_kwh"
+              name="annual_electricity_kwh"
+              type="number"
+              min={1500}
+              max={12000}
+              step={250}
+              placeholder={`${HOUSEHOLD_DEFAULT_KWH.toLocaleString("de-DE")} (default)`}
+            />
+            <p className="text-xs text-muted-foreground">
+              kWh per year (1,500–12,000). Leave empty to use the default {HOUSEHOLD_DEFAULT_KWH.toLocaleString("de-DE")}{" "}
+              kWh model for offer economics.
+            </p>
           </div>
 
           {locationError && (

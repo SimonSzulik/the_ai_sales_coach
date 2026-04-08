@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
-from sqlalchemy import JSON, DateTime, String
+from sqlalchemy import JSON, DateTime, Float, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -26,6 +26,7 @@ class LeadRow(Base):
     address: Mapped[str] = mapped_column(String(500))
     zip_code: Mapped[str] = mapped_column(String(10))
     product_interest: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    annual_electricity_kwh: Mapped[float | None] = mapped_column(Float, nullable=True)
     enrichment_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     briefing_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")
@@ -37,11 +38,22 @@ class LeadRow(Base):
 # Request / Response Schemas
 # ---------------------------------------------------------------------------
 
+DEFAULT_ANNUAL_ELECTRICITY_KWH = 4_000.0
+MIN_ANNUAL_ELECTRICITY_KWH = 1_500.0
+MAX_ANNUAL_ELECTRICITY_KWH = 12_000.0
+
+
 class LeadCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     address: str = Field(..., min_length=1, max_length=500)
     zip_code: str = Field(..., min_length=4, max_length=10)
     product_interest: str | None = Field(None, max_length=100)
+    annual_electricity_kwh: float | None = Field(
+        None,
+        ge=MIN_ANNUAL_ELECTRICITY_KWH,
+        le=MAX_ANNUAL_ELECTRICITY_KWH,
+        description="Annual household electricity use (kWh/yr); defaults to 4000 when omitted.",
+    )
 
 
 class LeadResponse(BaseModel):
@@ -50,10 +62,19 @@ class LeadResponse(BaseModel):
     address: str
     zip_code: str
     product_interest: str | None
+    annual_electricity_kwh: float | None = None
     status: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class RecomputeOffersBody(BaseModel):
+    annual_electricity_kwh: float = Field(
+        ...,
+        ge=MIN_ANNUAL_ELECTRICITY_KWH,
+        le=MAX_ANNUAL_ELECTRICITY_KWH,
+    )
 
 
 # ---------------------------------------------------------------------------

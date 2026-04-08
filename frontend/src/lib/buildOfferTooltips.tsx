@@ -389,8 +389,8 @@ export function buildCompareSectionTitleContent(enrichment: EnrichmentInput | un
     <div className="space-y-2">
       <p>{sectionTitleFallback}</p>
       <p className="text-[11px] text-muted-foreground">
-        Briefing snapshot: default household model <strong>{fmtInt(HOUSEHOLD_DEFAULT_KWH)} kWh/yr</strong> (not the
-        slider).
+        Offer economics use the lead&apos;s annual electricity usage (form + slider); the table updates after the server
+        syncs.
       </p>
       {annualYield != null ? (
         <p className="text-[11px]">
@@ -411,13 +411,14 @@ export function buildCompareRowContent(
   key: CompareRowKey,
   example: CompareOfferBundle,
   _enrichment: EnrichmentInput | undefined,
+  annualHouseholdKwh: number = HOUSEHOLD_DEFAULT_KWH,
 ): ReactNode {
   const o = example.offer;
   const subsidy = example.financing[0]?.subsidy_deducted_eur ?? 0;
   const upfront = Math.max(0, o.capex_eur - subsidy);
   const selfFrac = o.self_consumption_pct / 100;
   const selfKwh = o.annual_production_kwh * selfFrac;
-  const gridPct = Math.min(100, Math.round((selfKwh / HOUSEHOLD_DEFAULT_KWH) * 100));
+  const gridPct = Math.min(100, Math.round((selfKwh / annualHouseholdKwh) * 100));
   const twenty = twentyYearSum(o.annual_savings_eur);
   const panelArea = o.system_kwp / PANEL_KW_PER_M2;
 
@@ -426,7 +427,7 @@ export function buildCompareRowContent(
       {body}
       <p className="text-[11px] font-medium text-foreground border-t border-border pt-2">Example (recommended or first tier)</p>
       <p className="text-[11px] text-muted-foreground">
-        Tier: <strong>{o.tier}</strong> — numbers below are from this column&apos;s briefing values, not the usage slider.
+        Tier: <strong>{o.tier}</strong> — example formulas use the briefing row for this column (after any usage sync).
       </p>
     </div>
   );
@@ -452,17 +453,20 @@ export function buildCompareRowContent(
     case "selfConsumption":
       return formula(
         <>
-          <p>Backend self-use % using default household ({fmtInt(HOUSEHOLD_DEFAULT_KWH)} kWh), HP add-on, battery boost, and caps — not the interactive slider.</p>
+          <p>
+            Self-use % from the server model using annual household electricity ({fmtInt(annualHouseholdKwh)} kWh/yr), HP
+            add-on, battery boost, and caps.
+          </p>
           <p className="text-[11px] font-mono">Example: self_consumption_pct = {Math.round(o.self_consumption_pct)}%</p>
         </>,
       );
     case "gridIndependence":
       return formula(
         <>
-          <p>Illustrative share of fixed annual demand ({fmtInt(HOUSEHOLD_DEFAULT_KWH)} kWh) covered by self-consumed solar:</p>
-          <p className="text-[11px] font-mono">min(100, round(production × self% ÷ {HOUSEHOLD_DEFAULT_KWH} × 100))</p>
+          <p>Illustrative share of annual household demand ({fmtInt(annualHouseholdKwh)} kWh) covered by self-consumed solar:</p>
+          <p className="text-[11px] font-mono">min(100, round(production × self% ÷ {fmtInt(annualHouseholdKwh)} × 100))</p>
           <p className="text-[11px] font-mono">
-            = min(100, round({fmtInt(selfKwh)} ÷ {HOUSEHOLD_DEFAULT_KWH} × 100)) = {gridPct}%
+            = min(100, round({fmtInt(selfKwh)} ÷ {fmtInt(annualHouseholdKwh)} × 100)) = {gridPct}%
           </p>
         </>,
       );

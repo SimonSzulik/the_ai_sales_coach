@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from app.models import EnrichmentBundle, Offer, OfferComponent, OfferTier
+from app.models import (
+    DEFAULT_ANNUAL_ELECTRICITY_KWH,
+    EnrichmentBundle,
+    Offer,
+    OfferComponent,
+    OfferTier,
+)
 
 PV_COST_PER_KWP = 1_400
 BATTERY_COST_PER_KWH = 800
@@ -11,7 +17,6 @@ WALLBOX_COST = 1_500
 
 CO2_KG_PER_KWH_GRID = 0.4
 FEED_IN_TARIFF_EUR = 0.081
-HOUSEHOLD_CONSUMPTION_KWH = 4_000
 COMMON_BATTERY_SIZES = [5.0, 7.0, 10.0, 12.0, 15.0]
 
 MAX_STARTER_KWP = 10.0
@@ -114,14 +119,19 @@ def _compute_yield(planes: list[dict], annual_kwh_per_kwp: float) -> tuple[float
     return round(total_kwp, 1), round(total_kwh, 0)
 
 
-def _self_consumption_rate(annual_kwh: float, battery_kwh: float, has_heat_pump: bool) -> float:
+def _self_consumption_rate(
+    annual_kwh: float,
+    battery_kwh: float,
+    has_heat_pump: bool,
+    household_kwh: float,
+) -> float:
     """Realistic self-consumption model.
 
     Without battery: ~30% baseline
     Each kWh battery shifts ~250 kWh/yr from export to self-use.
     Heat pump adds flexible load, boosting self-consumption.
     """
-    consumption = HOUSEHOLD_CONSUMPTION_KWH
+    consumption = household_kwh
     if has_heat_pump:
         consumption += 3_000
 
@@ -169,7 +179,10 @@ def _extract_market_hints(bundle: EnrichmentBundle) -> dict:
     }
 
 
-def build_offers(bundle: EnrichmentBundle) -> list[Offer]:
+def build_offers(
+    bundle: EnrichmentBundle,
+    household_kwh: float = DEFAULT_ANNUAL_ELECTRICITY_KWH,
+) -> list[Offer]:
     solar = bundle.solar.data
     energy = bundle.energy.data
     hints = _extract_market_hints(bundle)
@@ -221,9 +234,9 @@ def build_offers(bundle: EnrichmentBundle) -> list[Offer]:
     rec_batt = _nearest_battery(rec_kwp * 1.2)
     prem_batt = _nearest_battery(prem_kwp * 1.5)
 
-    sc_starter = _self_consumption_rate(starter_kwh, 0, False)
-    sc_rec = _self_consumption_rate(rec_kwh, rec_batt, False)
-    sc_prem = _self_consumption_rate(prem_kwh, prem_batt, not has_heat_pump_already)
+    sc_starter = _self_consumption_rate(starter_kwh, 0, False, household_kwh)
+    sc_rec = _self_consumption_rate(rec_kwh, rec_batt, False, household_kwh)
+    sc_prem = _self_consumption_rate(prem_kwh, prem_batt, not has_heat_pump_already, household_kwh)
 
     starter_savings = _compute_savings(starter_kwh, sc_starter, retail_price, False, False)
     rec_savings = _compute_savings(rec_kwh, sc_rec, retail_price, False, False)

@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import (
+    DEFAULT_ANNUAL_ELECTRICITY_KWH,
     BriefingResponse,
     LeadCreate,
     LeadResponse,
     LeadRow,
+    RecomputeOffersBody,
 )
-from app.pipeline import run_pipeline
+from app.pipeline import recompute_offers_only, run_pipeline
 
 router = APIRouter()
 
@@ -31,6 +33,9 @@ async def create_lead(
         address=payload.address,
         zip_code=payload.zip_code,
         product_interest=payload.product_interest,
+        annual_electricity_kwh=payload.annual_electricity_kwh
+        if payload.annual_electricity_kwh is not None
+        else DEFAULT_ANNUAL_ELECTRICITY_KWH,
     )
     db.add(row)
     await db.commit()
@@ -47,6 +52,18 @@ async def get_lead(lead_id: str, db: AsyncSession = Depends(get_db)):
     if not row:
         raise HTTPException(404, "Lead not found")
     return row
+
+
+@router.post("/lead/{lead_id}/recompute-offers", response_model=BriefingResponse)
+async def recompute_offers(lead_id: str, body: RecomputeOffersBody):
+    """Rebuild offers from stored enrichment using the given annual electricity usage (kWh/yr)."""
+    result = await recompute_offers_only(lead_id, body.annual_electricity_kwh)
+    if result is None:
+        raise HTTPException(
+            400,
+            detail="Lead not found, not ready, or missing enrichment data for recomputation.",
+        )
+    return result
 
 
 @router.get("/lead/{lead_id}/briefing", response_model=BriefingResponse)

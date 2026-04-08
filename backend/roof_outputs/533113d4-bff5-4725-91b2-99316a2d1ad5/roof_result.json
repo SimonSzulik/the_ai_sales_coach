@@ -1,0 +1,31 @@
+{
+  "address": "10115 Berlin, Germany",
+  "lat": 52.532614,
+  "lon": 13.3777035,
+  "location_type": "APPROXIMATE",
+  "total_roof_area_m2": 500.8,
+  "total_estimated_kwp": 90.14,
+  "planes": [
+    {
+      "cluster_id": 0,
+      "area_m2": 341.22,
+      "tilt_deg": 0.1,
+      "azimuth_deg": 123.6,
+      "suitability": "high",
+      "estimated_kwp": 61.42,
+      "triangle_count": 103
+    },
+    {
+      "cluster_id": 1,
+      "area_m2": 159.58,
+      "tilt_deg": 3.7,
+      "azimuth_deg": 105.5,
+      "suitability": "high",
+      "estimated_kwp": 28.72,
+      "triangle_count": 7
+    }
+  ],
+  "preview": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/533113d4-bff5-4725-91b2-99316a2d1ad5/roof_topdown.png",
+  "preview_3d": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/533113d4-bff5-4725-91b2-99316a2d1ad5/roof_preview_3d.html",
+  "compare_maps": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/533113d4-bff5-4725-91b2-99316a2d1ad5/roof_vs_maps.png"
+}

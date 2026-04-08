@@ -1,11 +1,11 @@
 /** Short fallbacks when enrichment is missing or a builder branch is unreachable. */
 
-export const sectionTitleFallback = `This table shows numbers exactly as stored in the briefing (default household electricity model from the server, typically ~4,000 kWh/year). It does not follow the usage slider on the offer cards — if you change the slider, the cards can show different savings, payback, and self-use than this table.`;
+export const sectionTitleFallback = `This table shows numbers as stored in the briefing. When you move the usage slider on the offer cards, the app saves your annual kWh to the server and refreshes these figures after a short delay so they stay aligned.`;
 
 const compareRowFallbackByKey: Record<string, string> = {
   systemSize: `Peak DC capacity in kilowatts. Sourced from roof analysis and tier caps.`,
   annualProduction: `Estimated kWh/yr from PVGIS yield per kWp and roof geometry, scaled if capped.`,
-  selfConsumption: `Backend self-use % with default household — not the interactive slider.`,
+  selfConsumption: `Self-use % from the briefing model, using the lead’s annual electricity usage (slider / form).`,
   gridIndependence: `Share of a fixed annual household demand covered by self-consumed solar (capped at 100%).`,
   upfront: `Capital cost minus first financing scenario subsidy deduction.`,
   annualSavings: `Year-one savings from briefing (self × retail + export × feed-in + add-ons).`,
