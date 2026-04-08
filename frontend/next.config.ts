@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://backend:8000/api/:path*",
+        destination: "https://api-qhack.mehdy.eu/api/:path*",
       },
     ];
   },
