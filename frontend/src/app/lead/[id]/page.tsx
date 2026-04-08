@@ -18,7 +18,6 @@ import MarketContext from "@/components/MarketContext";
 
 import SalesCoach from "@/components/SalesCoach";
 import RoofAnalysisTab from "@/components/RoofAnalysisTab";
-import SavingsSimulator from "@/components/SavingsSimulator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
@@ -203,6 +202,7 @@ export default function BriefingPage() {
           energy={e.energy}
           subsidies={e.subsidies}
           marketContext={e.market_context}
+          roofAnalysis={e.roof_analysis}
           score={e.opportunity_score}
           drivers={e.opportunity_drivers}
         />
@@ -256,8 +256,6 @@ export default function BriefingPage() {
               />
             </div>
           </div>
-
-          <SavingsSimulator offers={briefing.offers} />
 
           {showFinancing && (
             <div ref={financingRef}>

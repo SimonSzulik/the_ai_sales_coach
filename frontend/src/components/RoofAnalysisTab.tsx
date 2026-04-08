@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { compassFromAzimuth } from "@/lib/roofGeometry";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -25,11 +26,6 @@ interface RoofData {
 interface Props {
   leadId: string;
   roofData?: RoofData | null;
-}
-
-function compassLabel(deg: number): string {
-  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  return dirs[Math.round(deg / 45) % 8];
 }
 
 export default function RoofAnalysisTab({ leadId, roofData }: Props) {
@@ -203,7 +199,7 @@ export default function RoofAnalysisTab({ leadId, roofData }: Props) {
                       <td className="py-2 pr-4 tabular-nums">{p.estimated_kwp.toFixed(1)}</td>
                       <td className="py-2 pr-4 tabular-nums">{p.tilt_deg.toFixed(0)}&deg;</td>
                       <td className="py-2 pr-4">
-                        {p.orientation || compassLabel(p.azimuth_deg)} ({p.azimuth_deg.toFixed(0)}&deg;)
+                        {p.orientation || compassFromAzimuth(p.azimuth_deg)} ({p.azimuth_deg.toFixed(0)}&deg;)
                       </td>
                     </tr>
                   ))}

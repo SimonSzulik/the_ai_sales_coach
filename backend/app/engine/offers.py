@@ -14,22 +14,77 @@ FEED_IN_TARIFF_EUR = 0.081
 HOUSEHOLD_CONSUMPTION_KWH = 4_000
 COMMON_BATTERY_SIZES = [5.0, 7.0, 10.0, 12.0, 15.0]
 
+MAX_STARTER_KWP = 10.0
+MAX_REC_KWP = 15.0
+MAX_PREM_KWP = 20.0
+
+
+_TILT_ROWS = [0, 10, 20, 30, 35, 45, 60, 90]
+
+_YIELD_TABLE: dict[int, dict[str, float]] = {
+    0:  {"S": 0.87, "SE": 0.87, "E": 0.87, "N": 0.87},
+    10: {"S": 0.93, "SE": 0.92, "E": 0.89, "N": 0.83},
+    20: {"S": 0.98, "SE": 0.96, "E": 0.88, "N": 0.74},
+    30: {"S": 1.00, "SE": 0.97, "E": 0.86, "N": 0.65},
+    35: {"S": 1.00, "SE": 0.97, "E": 0.84, "N": 0.61},
+    45: {"S": 0.97, "SE": 0.94, "E": 0.79, "N": 0.53},
+    60: {"S": 0.90, "SE": 0.86, "E": 0.71, "N": 0.42},
+    90: {"S": 0.69, "SE": 0.65, "E": 0.54, "N": 0.25},
+}
+
+
+def _az_bucket(azimuth_deg: float) -> str:
+    """Map azimuth (0-360, 180=south) to compass bucket for the yield table."""
+    south_offset = abs(((azimuth_deg - 180) + 180) % 360 - 180)
+    if south_offset <= 22.5:
+        return "S"
+    if south_offset <= 67.5:
+        return "SE"
+    if south_offset <= 112.5:
+        return "E"
+    return "N"
+
+
+def _lerp(a: float, b: float, t: float) -> float:
+    return a + (b - a) * t
+
 
 def _tilt_azimuth_factor(tilt_deg: float, azimuth_deg: float) -> float:
-    """Fraction of optimal yield (0.4–1.0) based on plane geometry.
+    """Fraction of optimal yield (0.25–1.0) via PVGIS lookup table for Germany.
 
-    Peak at ~35 deg tilt and due-south (180 deg azimuth) for Germany.
-    Derived from standard German irradiation lookup tables (DGS).
+    Uses bilinear interpolation over the standard German irradiation table
+    (source: PVGIS simulation data for 51 deg N, ref: south/33 deg = 100%).
     """
-    south_offset = abs(((azimuth_deg - 180) + 180) % 360 - 180)
-    tilt_factor = 1.0 - 0.005 * abs(tilt_deg - 35)
-    az_factor = 1.0 - 0.004 * south_offset
-    return max(0.4, min(1.0, tilt_factor * az_factor))
+    bucket = _az_bucket(azimuth_deg)
+    clamped_tilt = max(0.0, min(90.0, tilt_deg))
+
+    lo_idx = 0
+    for i, t in enumerate(_TILT_ROWS):
+        if t <= clamped_tilt:
+            lo_idx = i
+    hi_idx = min(lo_idx + 1, len(_TILT_ROWS) - 1)
+
+    lo_tilt = _TILT_ROWS[lo_idx]
+    hi_tilt = _TILT_ROWS[hi_idx]
+
+    if lo_tilt == hi_tilt:
+        return _YIELD_TABLE[lo_tilt][bucket]
+
+    t = (clamped_tilt - lo_tilt) / (hi_tilt - lo_tilt)
+    return _lerp(_YIELD_TABLE[lo_tilt][bucket], _YIELD_TABLE[hi_tilt][bucket], t)
 
 
 def _nearest_battery(target_kwh: float) -> float:
     """Round to the nearest common battery size."""
     return min(COMMON_BATTERY_SIZES, key=lambda s: abs(s - target_kwh))
+
+
+def _cap_system(kwp: float, kwh: float, max_kwp: float) -> tuple[float, float]:
+    """Clamp system size to a residential maximum, scaling kWh proportionally."""
+    if kwp <= max_kwp:
+        return round(kwp, 1), round(kwh, 0)
+    ratio = max_kwp / kwp
+    return round(max_kwp, 1), round(kwh * ratio, 0)
 
 
 def _extract_roof_planes(bundle: EnrichmentBundle) -> list[dict] | None:
@@ -158,6 +213,10 @@ def build_offers(bundle: EnrichmentBundle) -> list[Offer]:
         starter_kwh = starter_kwp * annual_yield_per_kwp
         rec_kwh = rec_kwp * annual_yield_per_kwp
         prem_kwh = prem_kwp * annual_yield_per_kwp
+
+    starter_kwp, starter_kwh = _cap_system(starter_kwp, starter_kwh, MAX_STARTER_KWP)
+    rec_kwp, rec_kwh = _cap_system(rec_kwp, rec_kwh, MAX_REC_KWP)
+    prem_kwp, prem_kwh = _cap_system(prem_kwp, prem_kwh, MAX_PREM_KWP)
 
     rec_batt = _nearest_battery(rec_kwp * 1.2)
     prem_batt = _nearest_battery(prem_kwp * 1.5)

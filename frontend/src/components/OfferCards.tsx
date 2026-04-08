@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
 
 interface Financing {
   type: string;
@@ -22,6 +24,10 @@ interface OfferData {
     annual_production_kwh: number;
     roof_utilization_pct: number;
     system_kwp: number;
+    battery_kwh: number;
+    retail_price_eur_kwh: number;
+    feed_in_tariff_eur: number;
+    has_heat_pump: boolean;
   };
   financing: Financing[];
 }
@@ -30,6 +36,37 @@ interface Props {
   offers: OfferData[];
   name: string;
   onShowFinancing?: () => void;
+}
+
+const CO2_PER_KWH = 0.4;
+const DEFAULT_HOUSEHOLD = 4000;
+
+function recalcSelfConsumption(
+  annualKwh: number,
+  batteryKwh: number,
+  hasHeatPump: boolean,
+  householdKwh: number,
+): number {
+  const consumption = householdKwh + (hasHeatPump ? 3000 : 0);
+  if (annualKwh <= 0) return 0;
+  const baseSc = Math.min(0.30, consumption / annualKwh);
+  const batteryBoost = (batteryKwh * 250) / annualKwh;
+  const hpBoost = hasHeatPump ? 0.08 : 0;
+  const cap = hasHeatPump ? 0.90 : batteryKwh > 0 ? 0.75 : 0.40;
+  return Math.min(baseSc + batteryBoost + hpBoost, cap);
+}
+
+function recalcSavings(
+  annualKwh: number,
+  scRate: number,
+  retailPrice: number,
+  feedInTariff: number,
+  hasHeatPump: boolean,
+): number {
+  const selfConsumed = annualKwh * scRate;
+  const exported = annualKwh - selfConsumed;
+  const hpSavings = hasHeatPump ? 1200 : 0;
+  return selfConsumed * retailPrice + exported * feedInTariff + hpSavings;
 }
 
 function fmt(n: number) {
@@ -117,6 +154,35 @@ const tierConfig: Record<string, { badge1: string; badge2: string; badge1Variant
 
 export default function OfferCards({ offers, name, onShowFinancing }: Props) {
   const firstName = name.split(" ")[0];
+  const [household, setHousehold] = useState(DEFAULT_HOUSEHOLD);
+
+  const simulated = useMemo(
+    () =>
+      offers.map(({ offer: o }) => {
+        const sc = recalcSelfConsumption(
+          o.annual_production_kwh,
+          o.battery_kwh ?? 0,
+          o.has_heat_pump ?? false,
+          household,
+        );
+        const savings = recalcSavings(
+          o.annual_production_kwh,
+          sc,
+          o.retail_price_eur_kwh ?? 0.35,
+          o.feed_in_tariff_eur ?? 0.081,
+          o.has_heat_pump ?? false,
+        );
+        const payback = savings > 0 ? o.capex_eur / savings : 99;
+        const co2 = o.annual_production_kwh * sc * CO2_PER_KWH;
+        return {
+          scPct: Math.round(sc * 100),
+          savings: Math.round(savings),
+          payback: Math.round(payback * 10) / 10,
+          co2: Math.round(co2),
+        };
+      }),
+    [offers, household],
+  );
 
   return (
     <div>
@@ -142,14 +208,53 @@ export default function OfferCards({ offers, name, onShowFinancing }: Props) {
         </div>
       </div>
 
+      {/* Shared household consumption slider */}
+      <div className="mb-5 rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+            </svg>
+            <label className="text-sm font-medium">Your annual electricity usage</label>
+          </div>
+          <span className="text-sm font-bold tabular-nums">
+            {new Intl.NumberFormat("de-DE").format(household)} kWh
+          </span>
+        </div>
+        <Slider
+          min={1500}
+          max={12000}
+          step={250}
+          value={[household]}
+          onValueChange={(v) => {
+            const val = Array.isArray(v) ? v[0] : v;
+            setHousehold(val);
+          }}
+        />
+        <div className="flex justify-between text-[11px] text-muted-foreground">
+          <span>1,500 kWh (single)</span>
+          <span>4,000 kWh (avg.)</span>
+          <span>12,000 kWh (large home)</span>
+        </div>
+        {household !== DEFAULT_HOUSEHOLD && (
+          <button
+            className="text-xs text-blue-600 hover:underline font-medium"
+            onClick={() => setHousehold(DEFAULT_HOUSEHOLD)}
+          >
+            Reset to default (4,000 kWh)
+          </button>
+        )}
+      </div>
+
       <div className="grid gap-5 md:grid-cols-3">
-        {offers.map(({ offer: o, financing }) => {
+        {offers.map(({ offer: o, financing }, idx) => {
           const isRec = o.tier === "recommended";
           const config = tierConfig[o.tier] ?? tierConfig.starter;
           const subsidy = financing[0]?.subsidy_deducted_eur ?? 0;
           const priceAfterSubsidy = Math.max(0, o.capex_eur - subsidy);
           const fullFinancing = financing.find((f) => f.type === "full");
           const monthly = fullFinancing?.monthly_payment_eur ?? 0;
+          const sim = simulated[idx];
 
           return (
             <div
@@ -214,7 +319,7 @@ export default function OfferCards({ offers, name, onShowFinancing }: Props) {
                 </div>
                 <div>
                   <div className={`text-base font-bold tabular-nums ${isRec ? "text-white" : "text-foreground"}`}>
-                    {Math.round(o.self_consumption_pct)}%
+                    {sim.scPct}%
                   </div>
                   <div className={`text-[10px] ${isRec ? "text-blue-200" : "text-muted-foreground"}`}>self-use</div>
                 </div>
@@ -261,9 +366,23 @@ export default function OfferCards({ offers, name, onShowFinancing }: Props) {
                       Payback
                     </div>
                     <div className="text-2xl font-bold tabular-nums">
-                      {o.payback_years} years
+                      {sim.payback} yr
                     </div>
                   </div>
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className={`text-xs ${isRec ? "text-blue-200" : "text-muted-foreground"}`}>
+                    Annual savings
+                  </span>
+                  <span className="text-sm font-bold tabular-nums">{fmt(sim.savings)}/yr</span>
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className={`text-xs ${isRec ? "text-blue-200" : "text-muted-foreground"}`}>
+                    CO₂ saved
+                  </span>
+                  <span className="text-sm font-bold tabular-nums">
+                    {new Intl.NumberFormat("de-DE").format(sim.co2)} kg/yr
+                  </span>
                 </div>
               </div>
 
@@ -280,7 +399,7 @@ export default function OfferCards({ offers, name, onShowFinancing }: Props) {
                   </span>
                   {isRec && (
                     <span className="text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
-                      {Math.round(o.self_consumption_pct)}% self-use
+                      {sim.scPct}% self-use
                     </span>
                   )}
                 </div>

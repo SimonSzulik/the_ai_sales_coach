@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { compassFromAzimuth } from "@/lib/roofGeometry";
 
 interface Props {
   lead: {
@@ -16,8 +17,43 @@ interface Props {
   energy: { confidence: string; data: Record<string, unknown> };
   subsidies: { confidence: string; data: Record<string, unknown> };
   marketContext: { confidence: string; data: Record<string, unknown> };
+  roofAnalysis?: { confidence: string; data: Record<string, unknown> };
   score: number;
   drivers: string[];
+}
+
+function parseRoofPlanes(data: Record<string, unknown> | undefined): {
+  planes: { tilt_deg: number; azimuth_deg: number; area_m2?: number; suitability?: string }[];
+  error: unknown;
+  totalRoofArea: number | undefined;
+} {
+  if (!data) return { planes: [], error: undefined, totalRoofArea: undefined };
+  const error = data.error;
+  const raw = data.planes;
+  if (!Array.isArray(raw)) return { planes: [], error, totalRoofArea: undefined };
+  const planes = raw
+    .map((p) => {
+      if (!p || typeof p !== "object") return null;
+      const o = p as Record<string, unknown>;
+      const tilt = o.tilt_deg;
+      const az = o.azimuth_deg;
+      if (typeof tilt !== "number" || typeof az !== "number") return null;
+      const area = o.area_m2;
+      const suit = o.suitability;
+      return {
+        tilt_deg: tilt,
+        azimuth_deg: az,
+        area_m2: typeof area === "number" ? area : undefined,
+        suitability: typeof suit === "string" ? suit : undefined,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null);
+  const tra = data.total_roof_area_m2;
+  return {
+    planes,
+    error,
+    totalRoofArea: typeof tra === "number" ? tra : undefined,
+  };
 }
 
 function fmt(n: number) {
@@ -41,6 +77,7 @@ export default function OverviewTab({
   energy,
   subsidies,
   marketContext,
+  roofAnalysis,
   score,
   drivers,
 }: Props) {
@@ -60,6 +97,21 @@ export default function OverviewTab({
     lat && lon
       ? `https://www.openstreetmap.org/export/embed.html?bbox=${lon - 0.005},${lat - 0.003},${lon + 0.005},${lat + 0.003}&layer=mapnik&marker=${lat},${lon}`
       : null;
+
+  const roofData = roofAnalysis?.data;
+  const { planes: roofPlanes, error: roofError, totalRoofArea } = parseRoofPlanes(roofData);
+  const hasRoofGeometry = roofPlanes.length > 0 && roofError == null;
+
+  const confidenceRows = [
+    { label: "Location", conf: geo.confidence },
+    { label: "Solar", conf: solar.confidence },
+    { label: "Energy", conf: energy.confidence },
+    { label: "Subsidies", conf: subsidies.confidence },
+    { label: "Market AI", conf: marketContext.confidence },
+    ...(roofAnalysis
+      ? [{ label: "Roof 3D", conf: roofAnalysis.confidence }]
+      : []),
+  ];
 
   return (
     <div className="grid gap-4 md:grid-cols-2 mt-4">
@@ -194,18 +246,76 @@ export default function OverviewTab({
               </div>
             )}
 
-            {/* Roof analysis / solar details */}
+            {/* Measured roof geometry from 3D analysis */}
+            {roofAnalysis && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Roof geometry (3D analysis)</h4>
+                {hasRoofGeometry ? (
+                  <>
+                    {(totalRoofArea != null || roofPlanes.length > 0) && (
+                      <p className="text-xs text-muted-foreground mb-3">
+                        {totalRoofArea != null && (
+                          <span>Total roof area ~{fmt(totalRoofArea)} m²</span>
+                        )}
+                        {totalRoofArea != null && roofPlanes.length > 0 && " · "}
+                        {roofPlanes.length > 0 && (
+                          <span>
+                            {roofPlanes.length} plane{roofPlanes.length === 1 ? "" : "s"} detected
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    <div className="overflow-x-auto rounded-lg border">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/40 text-left">
+                            <th className="py-2 px-2 font-medium text-muted-foreground">#</th>
+                            <th className="py-2 px-2 font-medium text-muted-foreground">Tilt</th>
+                            <th className="py-2 px-2 font-medium text-muted-foreground">Orientation</th>
+                            <th className="py-2 px-2 font-medium text-muted-foreground hidden sm:table-cell">Area</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {roofPlanes.map((p, i) => (
+                            <tr key={i} className="border-b border-border/50 last:border-0">
+                              <td className="py-2 px-2 tabular-nums">{i + 1}</td>
+                              <td className="py-2 px-2 tabular-nums">{p.tilt_deg.toFixed(0)}°</td>
+                              <td className="py-2 px-2">
+                                <span className="font-medium">{compassFromAzimuth(p.azimuth_deg)}</span>
+                                <span className="text-muted-foreground"> ({p.azimuth_deg.toFixed(0)}°)</span>
+                              </td>
+                              <td className="py-2 px-2 tabular-nums hidden sm:table-cell">
+                                {p.area_m2 != null ? `${fmt(p.area_m2)} m²` : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Roof geometry will appear after 3D analysis completes.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* PVGIS location reference (not measured roof) */}
             {solarData.optimal_angle != null && (
               <div>
-                <h4 className="text-sm font-semibold mb-2">Roof Analysis</h4>
+                <h4 className="text-sm font-semibold mb-2">Location solar reference (PVGIS)</h4>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Ideal angles for this latitude — not your measured roof.
+                </p>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Tilt</span>
+                    <span className="text-muted-foreground">Ideal tilt (site)</span>
                     <span className="font-medium">{String(solarData.optimal_angle)}°</span>
                   </div>
                   {solarData.optimal_azimuth != null && (
                     <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">Orientation</span>
+                      <span className="text-muted-foreground">Ideal azimuth (site)</span>
                       <span className="font-medium">{String(solarData.optimal_azimuth)}°</span>
                     </div>
                   )}
@@ -233,13 +343,7 @@ export default function OverviewTab({
           <CardContent className="pt-4">
             <div className="text-xs text-muted-foreground mb-2">Data confidence by source</div>
             <div className="space-y-2">
-              {[
-                { label: "Location", conf: geo.confidence },
-                { label: "Solar", conf: solar.confidence },
-                { label: "Energy", conf: energy.confidence },
-                { label: "Subsidies", conf: subsidies.confidence },
-                { label: "Market AI", conf: marketContext.confidence },
-              ].map((item) => (
+              {confidenceRows.map((item) => (
                 <div key={item.label} className="flex items-center gap-3">
                   <span className="text-xs w-16 text-muted-foreground">{item.label}</span>
                   <Progress
