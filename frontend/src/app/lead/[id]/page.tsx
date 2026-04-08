@@ -1,19 +1,25 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { getBriefing } from "@/lib/api";
+import { getBriefing, getLeads } from "@/lib/api";
+import { useDashboard } from "@/components/DashboardContext";
 import DashboardHeader from "@/components/DashboardHeader";
 import OverviewTab from "@/components/OverviewTab";
 import OfferCards from "@/components/OfferCards";
-import OfferComparison from "@/components/OfferComparison";
+import CompareNumbers from "@/components/CompareNumbers";
+import FinancingInfo from "@/components/FinancingInfo";
 import FinancingTable from "@/components/FinancingTable";
+import WhyRecommended from "@/components/WhyRecommended";
+import ReadyCTA from "@/components/ReadyCTA";
 import MarketContext from "@/components/MarketContext";
 import DataTrust from "@/components/DataTrust";
 import SalesCoach from "@/components/SalesCoach";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 type Briefing = {
   lead: { name: string; address: string; zip_code: string; product_interest?: string };
@@ -64,17 +70,69 @@ type Briefing = {
   }[];
 };
 
+function ObjectionsTab({ objections }: { objections: Briefing["coach"]["objections"] }) {
+  const [expanded, setExpanded] = useState<number | null>(null);
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-lg">Likely Objections</CardTitle>
+          <Badge variant="secondary" className="text-xs">AI-Generated</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">Prepared rebuttals for common customer concerns.</p>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {objections.map((o, i) => (
+          <button
+            key={i}
+            onClick={() => setExpanded(expanded === i ? null : i)}
+            className="w-full text-left rounded-lg border p-4 transition-colors hover:bg-muted/50"
+          >
+            <div className="flex justify-between items-start">
+              <span className="text-sm font-medium">&ldquo;{o.objection}&rdquo;</span>
+              <span className="text-xs text-muted-foreground ml-2">{expanded === i ? "▲" : "▼"}</span>
+            </div>
+            {expanded === i && (
+              <p className="mt-3 text-sm text-muted-foreground border-t pt-3">{o.rebuttal}</p>
+            )}
+          </button>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PlaceholderTab({ title, description }: { title: string; description: string }) {
+  return (
+    <Card>
+      <CardContent className="py-12 text-center">
+        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+          <svg className="w-6 h-6 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold mb-1">{title}</h3>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function BriefingPage() {
   const { id } = useParams<{ id: string }>();
+  const { activeSection, setBriefing: setCtxBriefing, setLeads } = useDashboard();
   const [briefing, setBriefing] = useState<Briefing | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showFinancing, setShowFinancing] = useState(false);
+  const financingRef = useRef<HTMLDivElement>(null);
 
   const poll = useCallback(async () => {
     try {
       const data = await getBriefing(id);
       if (data) {
         setBriefing(data);
+        setCtxBriefing(data);
         setLoading(false);
         return true;
       }
@@ -85,7 +143,7 @@ export default function BriefingPage() {
       setLoading(false);
       return true;
     }
-  }, [id]);
+  }, [id, setCtxBriefing]);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +157,17 @@ export default function BriefingPage() {
     loop();
     return () => { cancelled = true; };
   }, [poll]);
+
+  useEffect(() => {
+    getLeads()
+      .then((data) => setLeads(data))
+      .catch(() => {});
+  }, [setLeads]);
+
+  const handleShowFinancing = () => {
+    setShowFinancing(true);
+    setTimeout(() => financingRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+  };
 
   if (error) {
     return (
@@ -132,9 +201,10 @@ export default function BriefingPage() {
   }
 
   const e = briefing.enrichment;
+  const maxSubsidy = briefing.offers[0]?.financing[0]?.subsidy_deducted_eur ?? 0;
 
   return (
-    <main className="flex flex-1 flex-col p-4 md:p-8 max-w-7xl mx-auto w-full">
+    <main className="flex flex-1 flex-col p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
       <DashboardHeader
         name={briefing.lead.name}
         address={briefing.lead.address}
@@ -146,48 +216,101 @@ export default function BriefingPage() {
         confidenceDisclaimer={briefing.coach.confidence_disclaimer}
       />
 
-      <Tabs defaultValue="offers">
-        <TabsList variant="line" className="w-full justify-start border-b pb-0 mb-6">
-          <TabsTrigger value="overview" className="text-sm px-4 py-2">Overview</TabsTrigger>
-          <TabsTrigger value="offers" className="text-sm px-4 py-2">Offers</TabsTrigger>
-          <TabsTrigger value="market" className="text-sm px-4 py-2">Market Research</TabsTrigger>
-          <TabsTrigger value="coach" className="text-sm px-4 py-2">Sales Coach</TabsTrigger>
-        </TabsList>
+      {/* Overview */}
+      {activeSection === "overview" && (
+        <OverviewTab
+          lead={briefing.lead}
+          geo={e.geo}
+          solar={e.solar}
+          energy={e.energy}
+          subsidies={e.subsidies}
+          marketContext={e.market_context}
+          score={e.opportunity_score}
+          drivers={e.opportunity_drivers}
+        />
+      )}
 
-        <TabsContent value="overview">
-          <OverviewTab
-            lead={briefing.lead}
-            geo={e.geo}
-            solar={e.solar}
-            energy={e.energy}
-            subsidies={e.subsidies}
-            marketContext={e.market_context}
-            score={e.opportunity_score}
-            drivers={e.opportunity_drivers}
+      {/* Pre-research */}
+      {activeSection === "preresearch" && (
+        <div className="mt-4">
+          <PlaceholderTab
+            title="Pre-research"
+            description="Pre-visit research data and customer background will appear here."
           />
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="offers">
-          <div className="space-y-6 mt-4">
-            <OfferCards offers={briefing.offers} />
-            <OfferComparison offers={briefing.offers} />
-            <FinancingTable offers={briefing.offers} />
-          </div>
-        </TabsContent>
+      {/* On-site checklist */}
+      {activeSection === "checklist" && (
+        <div className="mt-4">
+          <PlaceholderTab
+            title="On-site checklist"
+            description="Roof inspection, electrical panel check, and site survey items will appear here."
+          />
+        </div>
+      )}
 
-        <TabsContent value="market">
-          <div className="space-y-4 mt-4">
-            <MarketContext data={e.market_context.data as never} />
-            <DataTrust entries={briefing.data_trust} />
-          </div>
-        </TabsContent>
+      {/* Offers — main section */}
+      {activeSection === "offers" && (
+        <div className="space-y-8 mt-4">
+          <OfferCards
+            offers={briefing.offers}
+            name={briefing.lead.name}
+            onShowFinancing={handleShowFinancing}
+          />
 
-        <TabsContent value="coach">
-          <div className="mt-4">
-            <SalesCoach coach={briefing.coach} />
+          <div className="grid gap-5 lg:grid-cols-5">
+            <div className="lg:col-span-3">
+              <CompareNumbers offers={briefing.offers} />
+            </div>
+            <div className="lg:col-span-2">
+              <FinancingInfo
+                maxSubsidy={maxSubsidy}
+                onExplore={handleShowFinancing}
+              />
+            </div>
           </div>
-        </TabsContent>
-      </Tabs>
+
+          {showFinancing && (
+            <div ref={financingRef}>
+              <FinancingTable offers={briefing.offers} />
+            </div>
+          )}
+
+          <Separator />
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <WhyRecommended />
+            </div>
+            <div>
+              <ReadyCTA name={briefing.lead.name} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Objections */}
+      {activeSection === "objections" && (
+        <div className="mt-4">
+          <ObjectionsTab objections={briefing.coach.objections} />
+        </div>
+      )}
+
+      {/* Market */}
+      {activeSection === "market" && (
+        <div className="space-y-4 mt-4">
+          <MarketContext data={e.market_context.data as never} />
+          <DataTrust entries={briefing.data_trust} />
+        </div>
+      )}
+
+      {/* AI Assistant */}
+      {activeSection === "assistant" && (
+        <div className="mt-4">
+          <SalesCoach coach={briefing.coach} />
+        </div>
+      )}
     </main>
   );
 }

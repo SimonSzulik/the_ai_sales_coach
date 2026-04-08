@@ -80,8 +80,17 @@ Respond ONLY with valid JSON matching this schema:
     "community_programs": "string"
   },
   "why_now_triggers": ["string"],
+  "sources": [
+    {"title": "string — name of the source page/document", "url": "string — full URL", "type": "regulation | subsidy | utility | news | program"}
+  ],
   "research_notes": "string — any caveats or assumptions"
 }
+
+IMPORTANT: In the "sources" array, include 5-10 relevant URLs you reference or \
+that the sales rep should have bookmarked. Examples: KfW program pages, BAFA \
+subsidy pages, the local Stadtwerke website, municipal Klimaschutz pages, \
+Bundesland solar obligation info pages, Solarkataster portals, relevant GEG \
+information pages. Use real, plausible German government / utility URLs.
 """
 
 
