@@ -1,12 +1,13 @@
 """Pipeline-Einstiegspunkt.
 
-Aufruf:
-    GOOGLE_MAPS_API_KEY=... python -m roof_analyzer.main "Schloßplatz 1, 70173 Stuttgart"
+Aufruf (API-Key aus Projekt-.env mit GOOGLE_MAPS_API_KEY=... oder Umgebungsvariable):
+    python -m roof_analyzer.main "Schloßplatz 1, 70173 Stuttgart"
 """
 from __future__ import annotations
 import json
 import os
 import sys
+from pathlib import Path
 from dataclasses import asdict
 
 import numpy as np
@@ -26,15 +27,16 @@ from .preview_3d import render_interactive_3d
 from .compare_view import render_comparison
 
 
-def analyze_address(address: str, api_key: str, out_dir: str = ".") -> dict:
+def analyze_address(address: str, api_key: str | None = None, out_dir: str = ".") -> dict:
+    key = _resolve_google_maps_api_key(api_key)
     print(f"[1/6] Geocoding: {address}")
-    g = geocode(address, api_key)
+    g = geocode(address, key)
     print(f"      -> {g.formatted}  ({g.lat:.6f}, {g.lon:.6f}, {g.location_type})")
     if not g.is_precise:
         print("      [warn] Geocoding ist nur APPROXIMATE — Ergebnisse mit Vorsicht.")
 
     print("[2/6] Lade 3D Tiles ...")
-    cfg = TileFetchConfig(api_key=api_key, target_lat=g.lat, target_lon=g.lon)
+    cfg = TileFetchConfig(api_key=key, target_lat=g.lat, target_lon=g.lon)
     raw_mesh = fetch_meshes(cfg)
     print(f"      -> {len(raw_mesh.faces)} Dreiecke geladen")
 
@@ -78,7 +80,7 @@ def analyze_address(address: str, api_key: str, out_dir: str = ".") -> dict:
             footprint_enu=fp_enu,
             lat=g.lat,
             lon=g.lon,
-            api_key=api_key,
+            api_key=key,
             out_path=compare_path,
             address=g.formatted,
         )
@@ -125,14 +127,34 @@ def analyze_address(address: str, api_key: str, out_dir: str = ".") -> dict:
     return result
 
 
+def _find_dotenv_path(filename: str = ".env") -> Path | None:
+    """Locate ``.env`` by walking up from cwd and from the ``roof_analyzer`` package directory.
+
+    Works for arbitrary project folders, monorepos, and different shells/OS paths: the first
+    existing file wins (search from cwd runs first, then from the package root).
+    """
+    max_levels = 32
+    seen: set[Path] = set()
+    for start in (Path.cwd(), Path(__file__).resolve().parent):
+        cur = start.resolve()
+        for _ in range(max_levels):
+            candidate = (cur / filename).resolve()
+            if candidate not in seen:
+                seen.add(candidate)
+                if candidate.is_file():
+                    return candidate
+            if cur.parent == cur:
+                break
+            cur = cur.parent
+    return None
+
+
 def _load_dotenv(path: str = ".env") -> None:
     """Load KEY=VALUE pairs from a .env file into os.environ (no 'export' needed)."""
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", path)
-    if not os.path.isfile(env_path):
-        env_path = os.path.join(os.getcwd(), path)
-    if not os.path.isfile(env_path):
+    env_path = _find_dotenv_path(path)
+    if env_path is None:
         return
-    with open(env_path) as f:
+    with open(env_path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#"):
@@ -147,13 +169,30 @@ def _load_dotenv(path: str = ".env") -> None:
             os.environ.setdefault(k, v)
 
 
+def get_google_maps_api_key() -> str | None:
+    """Load ``.env`` if found (see ``_find_dotenv_path``), then return ``GOOGLE_MAPS_API_KEY`` or ``None``."""
+    _load_dotenv()
+    key = os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()
+    return key or None
+
+
+def _resolve_google_maps_api_key(explicit: str | None) -> str:
+    _load_dotenv()
+    key = (explicit or "").strip() or os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()
+    if not key:
+        raise ValueError(
+            "GOOGLE_MAPS_API_KEY is not set. Add GOOGLE_MAPS_API_KEY to the project .env file "
+            "or set the environment variable."
+        )
+    return key
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python -m roof_analyzer.main 'Adresse'")
         sys.exit(1)
-    _load_dotenv()
-    key = os.environ.get("GOOGLE_MAPS_API_KEY")
-    if not key:
-        print("Bitte GOOGLE_MAPS_API_KEY setzen.")
+    try:
+        analyze_address(" ".join(sys.argv[1:]), out_dir=os.getcwd())
+    except ValueError as e:
+        print(str(e))
         sys.exit(1)
-    analyze_address(" ".join(sys.argv[1:]), key, out_dir=os.getcwd())

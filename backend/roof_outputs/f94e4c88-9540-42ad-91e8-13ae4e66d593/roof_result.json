@@ -1,0 +1,22 @@
+{
+  "address": "Paulinstraße 144, 54292 Trier, Germany",
+  "lat": 49.7649079,
+  "lon": 6.6530141,
+  "location_type": "ROOFTOP",
+  "total_roof_area_m2": 55.45,
+  "total_estimated_kwp": 9.98,
+  "planes": [
+    {
+      "cluster_id": 0,
+      "area_m2": 55.45,
+      "tilt_deg": 29.4,
+      "azimuth_deg": 313.3,
+      "suitability": "low",
+      "estimated_kwp": 9.98,
+      "triangle_count": 2
+    }
+  ],
+  "preview": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/f94e4c88-9540-42ad-91e8-13ae4e66d593/roof_topdown.png",
+  "preview_3d": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/f94e4c88-9540-42ad-91e8-13ae4e66d593/roof_preview_3d.html",
+  "compare_maps": "/home/simon/Dokumente/Projekte/Q-Summit 2026 Hackathon/the_ai_sales_coach./backend/roof_outputs/f94e4c88-9540-42ad-91e8-13ae4e66d593/roof_vs_maps.png"
+}

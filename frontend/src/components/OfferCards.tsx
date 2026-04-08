@@ -3,6 +3,15 @@
 import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { InfoTooltip } from "@/components/ui/tooltip";
+import {
+  buildSliderTooltipContent,
+  buildTierCardTooltipContent,
+  type EnrichmentInput,
+  recalcSelfConsumption,
+  recalcSavings,
+} from "@/lib/buildOfferTooltips";
+import { CO2_KG_PER_KWH_GRID, FEED_IN_TARIFF_EUR, HOUSEHOLD_DEFAULT_KWH } from "@/lib/offerCalcConstants";
 
 interface Financing {
   type: string;
@@ -36,38 +45,10 @@ interface Props {
   offers: OfferData[];
   name: string;
   onShowFinancing?: () => void;
+  enrichment?: EnrichmentInput;
 }
 
-const CO2_PER_KWH = 0.4;
-const DEFAULT_HOUSEHOLD = 4000;
-
-function recalcSelfConsumption(
-  annualKwh: number,
-  batteryKwh: number,
-  hasHeatPump: boolean,
-  householdKwh: number,
-): number {
-  const consumption = householdKwh + (hasHeatPump ? 3000 : 0);
-  if (annualKwh <= 0) return 0;
-  const baseSc = Math.min(0.30, consumption / annualKwh);
-  const batteryBoost = (batteryKwh * 250) / annualKwh;
-  const hpBoost = hasHeatPump ? 0.08 : 0;
-  const cap = hasHeatPump ? 0.90 : batteryKwh > 0 ? 0.75 : 0.40;
-  return Math.min(baseSc + batteryBoost + hpBoost, cap);
-}
-
-function recalcSavings(
-  annualKwh: number,
-  scRate: number,
-  retailPrice: number,
-  feedInTariff: number,
-  hasHeatPump: boolean,
-): number {
-  const selfConsumed = annualKwh * scRate;
-  const exported = annualKwh - selfConsumed;
-  const hpSavings = hasHeatPump ? 1200 : 0;
-  return selfConsumed * retailPrice + exported * feedInTariff + hpSavings;
-}
+const DEFAULT_HOUSEHOLD = HOUSEHOLD_DEFAULT_KWH;
 
 function fmt(n: number) {
   return new Intl.NumberFormat("de-DE", {
@@ -152,9 +133,14 @@ const tierConfig: Record<string, { badge1: string; badge2: string; badge1Variant
   premium: { badge1: "PREMIUM", badge2: "Long-term", badge1Variant: "outline", badge2Variant: "secondary" },
 };
 
-export default function OfferCards({ offers, name, onShowFinancing }: Props) {
+export default function OfferCards({ offers, name, onShowFinancing, enrichment }: Props) {
   const firstName = name.split(" ")[0];
   const [household, setHousehold] = useState(DEFAULT_HOUSEHOLD);
+
+  const exampleOfferIndex = useMemo(() => {
+    const i = offers.findIndex(({ offer: o }) => o.tier === "recommended");
+    return i >= 0 ? i : 0;
+  }, [offers]);
 
   const simulated = useMemo(
     () =>
@@ -169,11 +155,11 @@ export default function OfferCards({ offers, name, onShowFinancing }: Props) {
           o.annual_production_kwh,
           sc,
           o.retail_price_eur_kwh ?? 0.35,
-          o.feed_in_tariff_eur ?? 0.081,
+          o.feed_in_tariff_eur ?? FEED_IN_TARIFF_EUR,
           o.has_heat_pump ?? false,
         );
         const payback = savings > 0 ? o.capex_eur / savings : 99;
-        const co2 = o.annual_production_kwh * sc * CO2_PER_KWH;
+        const co2 = o.annual_production_kwh * sc * CO2_KG_PER_KWH_GRID;
         return {
           scPct: Math.round(sc * 100),
           savings: Math.round(savings),
@@ -216,6 +202,18 @@ export default function OfferCards({ offers, name, onShowFinancing }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
             </svg>
             <label className="text-sm font-medium">Your annual electricity usage</label>
+            <InfoTooltip
+              content={
+                offers.length > 0 && simulated[exampleOfferIndex]
+                  ? buildSliderTooltipContent(
+                      offers[exampleOfferIndex]!.offer,
+                      household,
+                      simulated[exampleOfferIndex]!,
+                    )
+                  : "Adjust annual usage to see how self-use %, savings, payback, and CO₂ change on the cards."
+              }
+              label="How the usage slider affects the numbers"
+            />
           </div>
           <span className="text-sm font-bold tabular-nums">
             {new Intl.NumberFormat("de-DE").format(household)} kWh
@@ -293,9 +291,16 @@ export default function OfferCards({ offers, name, onShowFinancing }: Props) {
 
               {/* Title + subtitle */}
               <div className="px-5 pb-2">
-                <h3 className={`text-lg font-bold ${isRec ? "text-white" : "text-foreground"}`}>
-                  {o.label.split(" — ")[1] || o.label}
-                </h3>
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className={`text-lg font-bold min-w-0 flex-1 ${isRec ? "text-white" : "text-foreground"}`}>
+                    {o.label.split(" — ")[1] || o.label}
+                  </h3>
+                  <InfoTooltip
+                    variant={isRec ? "onDark" : "default"}
+                    content={buildTierCardTooltipContent(o.tier, o, enrichment)}
+                    label="How this offer is calculated"
+                  />
+                </div>
                 <p className={`text-xs mt-0.5 leading-relaxed ${isRec ? "text-blue-100" : "text-muted-foreground"}`}>
                   {o.rationale.length > 80 ? o.rationale.slice(0, 80) + "..." : o.rationale}
                 </p>

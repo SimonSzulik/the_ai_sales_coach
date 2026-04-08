@@ -4,8 +4,6 @@ import { createContext, useContext, useState, type ReactNode, type Dispatch, typ
 
 export type Section =
   | "overview"
-  | "preresearch"
-  | "checklist"
   | "roof"
   | "offers"
   | "market"
