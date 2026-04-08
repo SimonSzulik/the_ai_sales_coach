@@ -174,7 +174,7 @@ class OfferWithFinancing(BaseModel):
 # ---------------------------------------------------------------------------
 
 class SalesCoachOutput(BaseModel):
-    talk_track: str = ""
+    talk_track: list[str] = Field(default_factory=list)
     objections: list[ObjectionRebuttal] = Field(default_factory=list)
     qualifying_questions: list[str] = Field(default_factory=list)
     urgency_statement: str = ""

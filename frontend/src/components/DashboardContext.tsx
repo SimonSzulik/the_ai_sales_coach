@@ -8,7 +8,6 @@ export type Section =
   | "checklist"
   | "roof"
   | "offers"
-  | "objections"
   | "market"
   | "assistant";
 

@@ -1,7 +1,8 @@
-"""Market & regulatory context enricher — AI-powered via Anthropic Claude."""
+"""Market & regulatory context enricher — two parallel AI calls with web search."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -13,91 +14,146 @@ from app.models import Confidence, EnrichmentResult
 
 logger = logging.getLogger(__name__)
 
-MARKET_CONTEXT_PROMPT = """\
-You are a German energy market research analyst preparing a local market brief \
-for a sales representative who is about to visit a residential customer.
+# ---------------------------------------------------------------------------
+# Prompt A — Energy prices, building profile, local utility
+# ---------------------------------------------------------------------------
 
-Given the customer's address, research and compile a structured market & \
-regulatory context report. Reason from your knowledge of German energy policy, \
-building stock, municipal programs, and local utility providers.
+PRICES_PROMPT = """\
+You are a German energy market analyst. Given a residential address, use web \
+search to find REAL current data. Be concise — every text value must be one \
+short sentence or a few words maximum. Respond entirely in English.
 
-Research as if you were preparing a local market brief for an energy sales rep \
-visiting this exact neighbourhood. Be as specific and factual as possible.
+Research these three areas:
 
-Cover these areas:
+1. **Building profile** — estimated construction era, building type \
+(Einfamilienhaus, Mehrfamilienhaus, Reihenhaus, etc.), likely heating system, \
+and historic preservation status (Denkmalschutz: "yes", "no", or "possible").
 
-1. **Energy prices** — local retail electricity price estimate (EUR/kWh), \
-   price trend (rising/stable/falling), impact of CO2 pricing (Brennstoffemissionshandelsgesetz).
+2. **Energy prices** — search Verivox, Check24, Chip.de, or Stadtwerke sites \
+for the cheapest electricity tariff available at this zip code. Return the \
+provider name, tariff name, and price in EUR/kWh. Also determine whether the \
+local price trend is rising, stable, or falling.
 
-2. **Building profile** — estimated construction era based on the neighbourhood, \
-   likely current heating system, monument protection risk (Denkmalschutz), \
-   building type (single-family, multi-family, Reihenhaus, etc.).
+3. **Local utility** — identify the local Stadtwerke / default energy provider. \
+Find their website, any notable local tariffs (Ökostrom, dynamic), and local \
+energy programs.
 
-3. **Local regulations** — Bundesland-level solar obligations (Solarpflicht), \
-   any municipal building code specifics, GEG (Gebäudeenergiegesetz) implications, \
-   upcoming regulatory deadlines.
+For EVERY section, include a source_url and source_title linking to where you \
+found the data. If you cannot find data for a field, use "NAV" as the value.
 
-4. **Neighbour adoption** — estimated solar/heat-pump adoption rate in the area, \
-   whether the neighbourhood shows visible solar panels, any known Solarkataster data.
-
-5. **Municipal programs** — local Stadtwerke offers, municipal Klimaschutzkonzept \
-   programs, local Fördermittel (subsidies) on top of federal KfW/BAFA. \
-   Search for any city-specific ("Stadtseiten") energy programs, community solar \
-   initiatives, or local utility incentives.
-
-6. **Local utility** — name of the local Stadtwerke / energy provider, any special \
-   tariffs (Ökostrom, dynamic tariffs), community energy programs.
-
-7. **Why now triggers** — specific upcoming deadlines, subsidy budget exhaustion \
-   risks, price trajectory, regulatory changes that create urgency.
-
-Respond ONLY with valid JSON matching this schema:
+Respond ONLY with valid JSON matching this exact schema:
 {
-  "energy_prices": {
-    "local_retail_eur_kwh": number,
-    "trend": "rising" | "stable" | "falling",
-    "carbon_price_impact": "string — brief explanation"
-  },
   "building_profile": {
-    "estimated_era": "string — e.g. 1960s multi-family",
-    "likely_heating": "string — e.g. Gas central heating",
-    "monument_protection": "unlikely" | "possible" | "likely",
-    "building_type": "string — e.g. Mehrfamilienhaus"
+    "estimated_era": "string",
+    "building_type": "string",
+    "likely_heating": "string",
+    "historic_preservation": "yes" | "no" | "possible",
+    "source_url": "string | null",
+    "source_title": "string | null"
   },
-  "local_regulations": [
-    {"regulation": "string", "status": "string", "relevance": "string"}
-  ],
-  "neighbour_adoption": {
-    "solar_visible": "high" | "moderate" | "low" | "unknown",
-    "notes": "string"
+  "energy_prices": {
+    "cheapest_provider": "string",
+    "cheapest_tariff_name": "string",
+    "price_eur_kwh": number,
+    "trend": "rising" | "stable" | "falling",
+    "trend_detail": "string — max one sentence",
+    "source_url": "string | null",
+    "source_title": "string | null"
   },
-  "municipal_programs": [
-    {"name": "string", "provider": "string", "description": "string", "amount_or_benefit": "string"}
-  ],
   "local_utility": {
     "name": "string",
-    "special_tariffs": "string",
-    "community_programs": "string"
-  },
-  "why_now_triggers": ["string"],
-  "sources": [
-    {"title": "string — name of the source page/document", "url": "string — full URL", "type": "regulation | subsidy | utility | news | program"}
-  ],
-  "research_notes": "string — any caveats or assumptions"
+    "website": "string | null",
+    "local_tariffs": "string — one line",
+    "local_programs": "string — one line",
+    "source_url": "string | null",
+    "source_title": "string | null"
+  }
 }
-
-IMPORTANT: In the "sources" array, include 5-10 relevant URLs you reference or \
-that the sales rep should have bookmarked. Examples: KfW program pages, BAFA \
-subsidy pages, the local Stadtwerke website, municipal Klimaschutz pages, \
-Bundesland solar obligation info pages, Solarkataster portals, relevant GEG \
-information pages. Use real, plausible German government / utility URLs.
 """
+
+# ---------------------------------------------------------------------------
+# Prompt B — Regulations, municipal programs, why-now triggers
+# ---------------------------------------------------------------------------
+
+REGULATIONS_PROMPT = """\
+You are a German energy policy researcher. Given a residential address, use \
+web search to find REAL current regulations, subsidies, and municipal programs \
+relevant to this specific location. Be concise. Respond entirely in English.
+
+Research these areas:
+
+1. **Local regulations** — Bundesland-level solar obligations (Solarpflicht), \
+GEG (Gebäudeenergiegesetz) implications, municipal building code specifics. \
+Only include regulations that actually apply to this location or country.
+
+2. **Municipal programs** — local Stadtwerke offers, municipal Klimaschutzkonzept \
+programs, local Fördermittel on top of federal KfW/BAFA. Search city websites \
+and Stadtseiten for energy programs.
+
+3. **Why now** — 3-5 short bullet points (max 10 words each) explaining why \
+the customer should act now. Focus on subsidy deadlines, price trends, and \
+regulatory changes.
+
+For regulations and programs, include source_url and source_title. \
+If you cannot find data, use "NAV" as the value.
+
+Respond ONLY with valid JSON matching this exact schema:
+{
+  "local_regulations": [
+    {
+      "regulation": "string — short name",
+      "status": "string — e.g. active, upcoming",
+      "relevance": "string — one sentence max",
+      "source_url": "string | null",
+      "source_title": "string | null"
+    }
+  ],
+  "municipal_programs": [
+    {
+      "name": "string",
+      "provider": "string",
+      "benefit": "string — short, e.g. Up to 1500 EUR grant",
+      "source_url": "string | null",
+      "source_title": "string | null"
+    }
+  ],
+  "why_now": ["string — short bullet, max 10 words"]
+}
+"""
+
+
+def _extract_json(response) -> dict:
+    """Extract JSON from an Anthropic response that may contain web search blocks."""
+    last_text = ""
+    for block in response.content:
+        if getattr(block, "type", None) == "text":
+            last_text = block.text
+
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", last_text)
+    raw = match.group(1).strip() if match else last_text.strip()
+    return json.loads(raw)
+
+
+async def _call_with_web_search(
+    client: AsyncAnthropic,
+    system_prompt: str,
+    user_msg: str,
+) -> dict:
+    """Make a single Anthropic call with web search enabled."""
+    response = await client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=4096,
+        temperature=0.3,
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}],
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_msg}],
+    )
+    return _extract_json(response)
 
 
 async def enrich_market_context(
     address: str,
     zip_code: str,
-    city: str,
     product_interest: str | None,
 ) -> EnrichmentResult:
     settings = get_settings()
@@ -110,30 +166,58 @@ async def enrich_market_context(
         )
 
     user_msg = (
-        f"Customer address: {address}, {zip_code} {city}, Germany\n"
+        f"Customer address: {address}, {zip_code}, Germany\n"
         f"Product interest: {product_interest or 'Solar'}\n\n"
-        "Compile the market & regulatory context report for this location."
     )
 
     try:
         client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2000,
-            temperature=0.4,
-            system=MARKET_CONTEXT_PROMPT,
-            messages=[{"role": "user", "content": user_msg}],
+
+        prices_data, regulations_data = await asyncio.gather(
+            _call_with_web_search(
+                client,
+                PRICES_PROMPT,
+                user_msg + "Find energy prices, building profile, and local utility for this address.",
+            ),
+            _call_with_web_search(
+                client,
+                REGULATIONS_PROMPT,
+                user_msg + "Find local regulations, municipal programs, and why-now triggers for this address.",
+            ),
         )
 
-        raw = response.content[0].text
-        match = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
-        raw = match.group(1).strip() if match else raw.strip()
-        data = json.loads(raw)
+        merged = {**prices_data, **regulations_data}
+
+        sources = []
+        for section_key in ["building_profile", "energy_prices", "local_utility"]:
+            section = merged.get(section_key, {})
+            if isinstance(section, dict) and section.get("source_url"):
+                sources.append({
+                    "title": section.get("source_title", section_key),
+                    "url": section["source_url"],
+                    "type": "data",
+                })
+        for reg in merged.get("local_regulations", []):
+            if isinstance(reg, dict) and reg.get("source_url"):
+                sources.append({
+                    "title": reg.get("source_title", reg.get("regulation", "")),
+                    "url": reg["source_url"],
+                    "type": "regulation",
+                })
+        for prog in merged.get("municipal_programs", []):
+            if isinstance(prog, dict) and prog.get("source_url"):
+                sources.append({
+                    "title": prog.get("source_title", prog.get("name", "")),
+                    "url": prog["source_url"],
+                    "type": "program",
+                })
+
+        merged["sources"] = sources
 
         return EnrichmentResult(
             source="market_context_ai",
             confidence=Confidence.MEDIUM,
-            data=data,
+            data=merged,
         )
     except Exception as exc:
         logger.exception("Market context enrichment failed")

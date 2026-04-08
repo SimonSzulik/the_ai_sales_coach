@@ -15,11 +15,10 @@ import FinancingTable from "@/components/FinancingTable";
 import WhyRecommended from "@/components/WhyRecommended";
 import ReadyCTA from "@/components/ReadyCTA";
 import MarketContext from "@/components/MarketContext";
-import DataTrust from "@/components/DataTrust";
+
 import SalesCoach from "@/components/SalesCoach";
 import RoofAnalysisTab from "@/components/RoofAnalysisTab";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
 type Briefing = {
@@ -56,7 +55,7 @@ type Briefing = {
     }[];
   }[];
   coach: {
-    talk_track: string;
+    talk_track: string | string[];
     objections: { objection: string; rebuttal: string }[];
     qualifying_questions: string[];
     urgency_statement: string;
@@ -70,38 +69,6 @@ type Briefing = {
     fallback_used: boolean;
   }[];
 };
-
-function ObjectionsTab({ objections }: { objections: Briefing["coach"]["objections"] }) {
-  const [expanded, setExpanded] = useState<number | null>(null);
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <CardTitle className="text-lg">Likely Objections</CardTitle>
-          <Badge variant="secondary" className="text-xs">AI-Generated</Badge>
-        </div>
-        <p className="text-xs text-muted-foreground">Prepared rebuttals for common customer concerns.</p>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {objections.map((o, i) => (
-          <button
-            key={i}
-            onClick={() => setExpanded(expanded === i ? null : i)}
-            className="w-full text-left rounded-lg border p-4 transition-colors hover:bg-muted/50"
-          >
-            <div className="flex justify-between items-start">
-              <span className="text-sm font-medium">&ldquo;{o.objection}&rdquo;</span>
-              <span className="text-xs text-muted-foreground ml-2">{expanded === i ? "▲" : "▼"}</span>
-            </div>
-            {expanded === i && (
-              <p className="mt-3 text-sm text-muted-foreground border-t pt-3">{o.rebuttal}</p>
-            )}
-          </button>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
 
 function PlaceholderTab({ title, description }: { title: string; description: string }) {
   return (
@@ -296,19 +263,9 @@ export default function BriefingPage() {
         </div>
       )}
 
-      {/* Objections */}
-      {activeSection === "objections" && (
-        <div className="mt-4">
-          <ObjectionsTab objections={briefing.coach.objections} />
-        </div>
-      )}
-
       {/* Market */}
       {activeSection === "market" && (
-        <div className="space-y-4 mt-4">
-          <MarketContext data={e.market_context.data as never} />
-          <DataTrust entries={briefing.data_trust} />
-        </div>
+        <MarketContext data={e.market_context.data as never} />
       )}
 
       {/* AI Assistant */}
