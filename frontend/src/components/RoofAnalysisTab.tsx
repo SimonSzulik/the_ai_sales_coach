@@ -222,7 +222,7 @@ export default function RoofAnalysisTab({ leadId, roofData, roofMeta }: Props) {
 
       {/* 3D Model + Top-down view */}
       <div className="grid gap-5 md:grid-cols-2">
-        <Card className="flex flex-col h-[450px]">
+        <Card className="flex flex-col h-[550px]">
           <CardHeader className="pb-3 border-b space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-lg flex items-center gap-2">
@@ -256,22 +256,24 @@ export default function RoofAnalysisTab({ leadId, roofData, roofMeta }: Props) {
               </div>
             )}
             <iframe
-              className="w-full h-full absolute inset-0"
+              className="w-full h-full absolute inset-0 bg-transparent"
               src={preview3dUrl}
               title="3D Model Viewer"
               frameBorder={0}
+              scrolling="no"
               onLoad={() => {
                 setIframeLoaded(true);
                 setIframeTimedOut(false);
               }}
             />
-            <div className="absolute bottom-3 left-3 pointer-events-none bg-background/80 backdrop-blur text-xs px-2 py-1 rounded-md border shadow-sm">
+            {/* Tooltip nach oben links verschoben (top-3), damit er der Legende nicht im Weg ist */}
+            <div className="absolute top-3 left-3 pointer-events-none bg-background/80 backdrop-blur text-xs px-2 py-1 rounded-md border shadow-sm z-10">
               Tip: Drag to rotate, scroll to zoom
             </div>
           </CardContent>
         </Card>
 
-        <Card className="flex flex-col h-[450px]">
+        <Card className="flex flex-col h-[550px]">
           <CardHeader className="pb-3 border-b">
             <CardTitle className="text-lg flex items-center gap-2">
               <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
