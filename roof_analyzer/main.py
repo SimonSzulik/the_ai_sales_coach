@@ -23,6 +23,7 @@ from .roof_analysis import (
 )
 from .visualize import render_roof
 from .preview_3d import render_interactive_3d
+from .compare_view import render_comparison
 
 
 def analyze_address(address: str, api_key: str, out_dir: str = ".") -> dict:
@@ -65,7 +66,29 @@ def analyze_address(address: str, api_key: str, out_dir: str = ".") -> dict:
     print("[6/6] Visualisierung + Export")
     img_path = os.path.join(out_dir, "roof_topdown.png")
     html_path = os.path.join(out_dir, "roof_preview_3d.html")
+    compare_path = os.path.join(out_dir, "roof_vs_maps.png")
     render_roof(roof_mesh, labels, fp_enu, img_path)
+
+    # Side-by-side Vergleich Modell vs. Google Maps Satellit
+    try:
+        ok = render_comparison(
+            roof_mesh=roof_mesh,
+            full_mesh=enu_mesh,
+            labels=labels,
+            footprint_enu=fp_enu,
+            lat=g.lat,
+            lon=g.lon,
+            api_key=api_key,
+            out_path=compare_path,
+            address=g.formatted,
+        )
+        if ok:
+            print(f"      -> Vergleich Satellit vs. Modell: {compare_path}")
+        else:
+            print(f"      [warn] Vergleich erstellt, Satellitenbild fehlte: {compare_path}")
+    except Exception as e:
+        print(f"      [warn] Vergleichsbild fehlgeschlagen: {e}")
+        compare_path = None
 
     planes_dicts = [asdict(p) for p in planes]
     try:
@@ -93,6 +116,7 @@ def analyze_address(address: str, api_key: str, out_dir: str = ".") -> dict:
         "planes": planes_dicts,
         "preview": img_path,
         "preview_3d": html_path,
+        "compare_maps": compare_path,
     }
     json_path = os.path.join(out_dir, "roof_result.json")
     with open(json_path, "w", encoding="utf-8") as f:
