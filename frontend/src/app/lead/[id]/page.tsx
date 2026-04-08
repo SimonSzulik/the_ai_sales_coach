@@ -18,6 +18,7 @@ import MarketContext from "@/components/MarketContext";
 
 import SalesCoach from "@/components/SalesCoach";
 import RoofAnalysisTab from "@/components/RoofAnalysisTab";
+import SavingsSimulator from "@/components/SavingsSimulator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
@@ -29,6 +30,7 @@ type Briefing = {
     energy: { confidence: string; data: Record<string, unknown> };
     subsidies: { confidence: string; data: Record<string, unknown> };
     market_context: { confidence: string; data: Record<string, unknown> };
+    roof_analysis?: { confidence: string; data: Record<string, unknown> };
     opportunity_score: number;
     opportunity_drivers: string[];
   };
@@ -42,6 +44,14 @@ type Briefing = {
       annual_savings_eur: number;
       payback_years: number;
       co2_saved_kg: number;
+      self_consumption_pct: number;
+      annual_production_kwh: number;
+      roof_utilization_pct: number;
+      system_kwp: number;
+      battery_kwh: number;
+      retail_price_eur_kwh: number;
+      feed_in_tariff_eur: number;
+      has_heat_pump: boolean;
     };
     financing: {
       type: string;
@@ -218,9 +228,12 @@ export default function BriefingPage() {
         </div>
       )}
 
-      {/* Roof Analysis - NEUER TAB */}
+      {/* Roof Analysis */}
       {activeSection === "roof" && (
-        <RoofAnalysisTab />
+        <RoofAnalysisTab
+          leadId={id}
+          roofData={e.roof_analysis?.data as Record<string, unknown> | undefined}
+        />
       )}
 
       {/* Offers — main section */}
@@ -244,6 +257,8 @@ export default function BriefingPage() {
             </div>
           </div>
 
+          <SavingsSimulator offers={briefing.offers} />
+
           {showFinancing && (
             <div ref={financingRef}>
               <FinancingTable offers={briefing.offers} />
@@ -254,7 +269,7 @@ export default function BriefingPage() {
 
           <div className="grid gap-5 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <WhyRecommended />
+              <WhyRecommended offers={briefing.offers} />
             </div>
             <div>
               <ReadyCTA name={briefing.lead.name} />

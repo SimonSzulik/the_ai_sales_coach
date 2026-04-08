@@ -18,6 +18,10 @@ interface OfferData {
     annual_savings_eur: number;
     payback_years: number;
     co2_saved_kg: number;
+    self_consumption_pct: number;
+    annual_production_kwh: number;
+    roof_utilization_pct: number;
+    system_kwp: number;
   };
   financing: Financing[];
 }
@@ -105,7 +109,7 @@ function HouseIllustration({ tier }: { tier: string }) {
   );
 }
 
-const tierConfig: Record<string, { badge1: string; badge2: string; badge1Variant: "outline" | "default"; badge2Variant: "outline" | "secondary" }> = {
+const tierConfig: Record<string, { badge1: string; badge2: string; badge1Variant: "outline" | "default"; badge2Variant: "outline" | "secondary" | "default" }> = {
   starter: { badge1: "BASIC", badge2: "Requested", badge1Variant: "outline", badge2Variant: "secondary" },
   recommended: { badge1: "BEST CHOICE", badge2: "RECOMMENDED", badge1Variant: "default", badge2Variant: "default" },
   premium: { badge1: "PREMIUM", badge2: "Long-term", badge1Variant: "outline", badge2Variant: "secondary" },
@@ -192,6 +196,30 @@ export default function OfferCards({ offers, name, onShowFinancing }: Props) {
                 </p>
               </div>
 
+              {/* Key stats bar */}
+              <div className={`mx-5 mb-2 grid grid-cols-3 gap-2 rounded-lg px-3 py-2 text-center ${
+                isRec ? "bg-blue-700/40" : "bg-muted/40"
+              }`}>
+                <div>
+                  <div className={`text-base font-bold tabular-nums ${isRec ? "text-white" : "text-foreground"}`}>
+                    {o.system_kwp.toFixed(1)}
+                  </div>
+                  <div className={`text-[10px] ${isRec ? "text-blue-200" : "text-muted-foreground"}`}>kWp</div>
+                </div>
+                <div>
+                  <div className={`text-base font-bold tabular-nums ${isRec ? "text-white" : "text-foreground"}`}>
+                    {new Intl.NumberFormat("de-DE").format(Math.round(o.annual_production_kwh))}
+                  </div>
+                  <div className={`text-[10px] ${isRec ? "text-blue-200" : "text-muted-foreground"}`}>kWh/yr</div>
+                </div>
+                <div>
+                  <div className={`text-base font-bold tabular-nums ${isRec ? "text-white" : "text-foreground"}`}>
+                    {Math.round(o.self_consumption_pct)}%
+                  </div>
+                  <div className={`text-[10px] ${isRec ? "text-blue-200" : "text-muted-foreground"}`}>self-use</div>
+                </div>
+              </div>
+
               {/* House illustration */}
               <div className={`mx-4 rounded-xl overflow-hidden ${isRec ? "bg-blue-700/30" : "bg-muted/30"}`}>
                 <HouseIllustration tier={o.tier} />
@@ -252,7 +280,7 @@ export default function OfferCards({ offers, name, onShowFinancing }: Props) {
                   </span>
                   {isRec && (
                     <span className="text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
-                      ≈ your current bill
+                      {Math.round(o.self_consumption_pct)}% self-use
                     </span>
                   )}
                 </div>

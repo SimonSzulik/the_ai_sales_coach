@@ -9,3 +9,13 @@ httpx>=0.28
 anthropic>=0.52
 python-dotenv>=1.1
 aiosqlite
+# roof_analyzer dependencies
+requests>=2.31
+numpy>=1.26
+trimesh>=4.4
+pygltflib>=1.16
+shapely>=2.0
+pyproj>=3.6
+matplotlib>=3.8
+scikit-learn>=1.4
+plotly>=5.20
