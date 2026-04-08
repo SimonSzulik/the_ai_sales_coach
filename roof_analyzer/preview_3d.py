@@ -109,8 +109,10 @@ def render_interactive_3d(
 
     # Layout: equal aspect ratio, dunkler Hintergrund
     fig = go.Figure(data=traces)
+    # Layout: equal aspect ratio, dunkler Hintergrund, Iframe-optimiert
     fig.update_layout(
-        title=f"Roof Analyzer - {address}",
+        # Titel ausblenden, da wir ihn schon im React-Frontend haben
+        # title=f"Roof Analyzer - {address}",
         scene=dict(
             xaxis=dict(title="East [m]", backgroundcolor="#f7f7f7"),
             yaxis=dict(title="North [m]", backgroundcolor="#f7f7f7"),
@@ -118,15 +120,22 @@ def render_interactive_3d(
             aspectmode="data",  # KRITISCH: sonst wird das Gebaeude verzerrt
             camera=dict(eye=dict(x=1.3, y=-1.3, z=0.9)),
         ),
-        margin=dict(l=0, r=0, t=40, b=0),
+        # Ränder komplett auf 0 setzen, damit das 3D Modell den ganzen Platz nutzt
+        margin=dict(l=0, r=0, t=0, b=0),
+        # Legende flach und an den unteren Rand setzen
         legend=dict(
-            title="Dachflaechen (Legende klickbar)",
+            orientation="h",
+            yanchor="bottom",
+            y=0.02,
+            xanchor="center",
+            x=0.5,
             bgcolor="rgba(255,255,255,0.85)",
             bordercolor="#888",
             borderwidth=1,
             font=dict(size=10),
         ),
-        height=800,
+        # Automatische Größenanpassung statt fester 800px
+        autosize=True,
     )
 
     # Self-contained HTML (Plotly.js inline, keine CDN noetig)
