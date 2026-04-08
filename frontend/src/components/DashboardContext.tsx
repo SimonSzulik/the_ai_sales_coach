@@ -31,7 +31,7 @@ export interface DashboardState {
 const DashboardContext = createContext<DashboardState | null>(null);
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
-  const [activeSection, setActiveSection] = useState<Section>("offers");
+  const [activeSection, setActiveSection] = useState<Section>("overview");
   const [briefing, setBriefing] = useState<Record<string, unknown> | null>(null);
   const [leads, setLeads] = useState<LeadSummary[]>([]);
 

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { compassFromAzimuth } from "@/lib/roofGeometry";
+import { HOUSEHOLD_DEFAULT_KWH, TYPICAL_DE_HOUSEHOLD_KWH_ILLUSTRATIVE } from "@/lib/offerCalcConstants";
 
 interface Props {
   lead: {
@@ -18,7 +19,6 @@ interface Props {
   subsidies: { confidence: string; data: Record<string, unknown> };
   marketContext: { confidence: string; data: Record<string, unknown> };
   roofAnalysis?: { confidence: string; data: Record<string, unknown> };
-  score: number;
   drivers: string[];
 }
 
@@ -60,6 +60,35 @@ function fmt(n: number) {
   return new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(n);
 }
 
+function fmtEur(n: number) {
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+}
+
+function parseRetailEurKwh(data: Record<string, unknown>): number | undefined {
+  const v = data.retail_price_eur_kwh;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+/** Normalize market AI tariff fields to €/kWh (handles values stored as ct/kWh in some fields). */
+function marketScanEurPerKwh(ep: Record<string, unknown>): number | undefined {
+  const local = ep.local_retail_eur_kwh;
+  if (typeof local === "number" && Number.isFinite(local) && local > 0) {
+    if (local < 1.2) return local;
+    if (local < 150) return local / 100;
+  }
+  const p = ep.price_eur_kwh;
+  if (typeof p === "number" && Number.isFinite(p) && p > 0) {
+    if (p < 1.2) return p;
+    if (p < 150) return p / 100;
+  }
+  return undefined;
+}
+
 function InfoRow({ label, value }: { label: string; value: string | undefined | null }) {
   if (!value) return null;
   return (
@@ -78,19 +107,19 @@ export default function OverviewTab({
   subsidies,
   marketContext,
   roofAnalysis,
-  score,
   drivers,
 }: Props) {
   const mc = marketContext.data as Record<string, unknown>;
-  const bp = (mc?.building_profile ?? {}) as Record<string, string>;
+  const bp = (mc?.building_profile ?? {}) as Record<string, string | undefined>;
   const ep = (mc?.energy_prices ?? {}) as Record<string, unknown>;
-  const lu = (mc?.local_utility ?? {}) as Record<string, string>;
+  const lu = (mc?.local_utility ?? {}) as Record<string, string | undefined>;
 
   const solarData = solar.data as Record<string, unknown>;
   const energyData = energy.data as Record<string, unknown>;
   const subsidyData = subsidies.data as Record<string, unknown>;
   const geoData = geo.data as Record<string, unknown>;
 
+  const city = geoData.city as string | undefined;
   const lat = geoData.latitude as number | undefined;
   const lon = geoData.longitude as number | undefined;
   const mapUrl =
@@ -113,255 +142,386 @@ export default function OverviewTab({
       : []),
   ];
 
+  const highConfidenceCount = confidenceRows.filter((r) => r.conf === "high").length;
+  const yieldKwp =
+    solarData.annual_kwh_per_kwp != null ? Number(solarData.annual_kwh_per_kwp) : undefined;
+  const yieldOk = yieldKwp != null && Number.isFinite(yieldKwp);
+  const subsidyEur =
+    subsidyData.total_potential_eur != null ? Number(subsidyData.total_potential_eur) : undefined;
+  const subsidyOk = subsidyEur != null && Number.isFinite(subsidyEur) && subsidyEur > 0;
+  const smardRetail = parseRetailEurKwh(energyData);
+  const marketRetail = marketScanEurPerKwh(ep);
+  const hasSmard = smardRetail != null && smardRetail > 0;
+  const hasMarketTariff = marketRetail != null && marketRetail > 0;
+
+  const buildingHasAny =
+    !!(bp.estimated_era || bp.building_type || bp.likely_heating || bp.historic_preservation);
+
+  const trendStr = typeof ep.trend === "string" ? ep.trend : "";
+  const trendDetailStr = typeof ep.trend_detail === "string" ? ep.trend_detail : "";
+  const showPriceTrend =
+    (trendStr && trendStr !== "NAV") || (trendDetailStr && trendDetailStr !== "NAV");
+
+  const addressLine = [lead.address, lead.zip_code, city].filter(Boolean).join(" · ");
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 mt-4">
-      {/* Left — About the Customer */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">About the Customer</CardTitle>
-          <p className="text-xs text-muted-foreground">Key insights to personalise your approach.</p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Profile */}
-          <div>
-            <h4 className="text-sm font-semibold mb-2">Profile</h4>
-            <InfoRow label="Name" value={lead.name} />
-            <InfoRow label="Address" value={lead.address} />
-            <InfoRow label="Postal code" value={lead.zip_code} />
-            <InfoRow label="City" value={geoData.city as string} />
-            <InfoRow label="Interest" value={lead.product_interest} />
+    <div className="space-y-6 mt-4">
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">At a glance</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Key numbers from this briefing. Opportunity score is in the header.
+          </p>
+        </div>
+        <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
+          Offers in this app use a default household model of{" "}
+          <strong className="text-foreground tabular-nums">{HOUSEHOLD_DEFAULT_KWH.toLocaleString("de-DE")} kWh/year</strong>
+          . Typical German household electricity use is often cited around{" "}
+          <strong className="text-foreground tabular-nums">
+            ~{TYPICAL_DE_HOUSEHOLD_KWH_ILLUSTRATIVE.toLocaleString("de-DE")} kWh/year
+          </strong>{" "}
+          (illustrative, not from this address).
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-xl border border-sky-200/60 bg-gradient-to-br from-sky-50/90 to-white p-4 shadow-sm dark:from-sky-950/25 dark:to-background">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-sky-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Solar yield
+              </span>
+            </div>
+            {yieldOk ? (
+              <>
+                <div className="text-2xl font-bold tabular-nums text-sky-900 dark:text-sky-100">
+                  {fmt(yieldKwp!)}{" "}
+                  <span className="text-sm font-semibold text-sky-700/80">kWh/kWp·yr</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">PVGIS site reference</p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Awaiting solar data</p>
+            )}
           </div>
 
-          {/* Opportunity drivers */}
-          {drivers.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold mb-2">What drives this opportunity</h4>
-              <ul className="space-y-1.5">
-                {drivers.map((d, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    <svg className="w-4 h-4 mt-0.5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="text-muted-foreground">{d}</span>
-                  </li>
-                ))}
-              </ul>
+          <div className="rounded-xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50/90 to-white p-4 shadow-sm dark:from-emerald-950/25 dark:to-background">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Subsidies
+              </span>
             </div>
-          )}
-
-          {/* Building profile from AI */}
-          {bp.estimated_era && (
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Building Profile</h4>
-              <InfoRow label="Era" value={bp.estimated_era} />
-              <InfoRow label="Type" value={bp.building_type} />
-              <InfoRow label="Heating" value={bp.likely_heating} />
-              <InfoRow
-                label="Monument protection"
-                value={bp.monument_protection}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Right — About the Property */}
-      <div className="space-y-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">About the Property</CardTitle>
-            <p className="text-xs text-muted-foreground">Data-driven insights about the home.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Solar potential */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-xl border p-4">
-                <div className="text-xs text-muted-foreground mb-1">Solar potential</div>
-                {solarData.annual_kwh_per_kwp ? (
-                  <>
-                    <Badge variant={Number(solarData.annual_kwh_per_kwp) > 1000 ? "default" : "secondary"} className="text-xs mb-1">
-                      {Number(solarData.annual_kwh_per_kwp) > 1000 ? "HIGH" : "MODERATE"} ({fmt(Number(solarData.annual_kwh_per_kwp))})
-                    </Badge>
-                    <div className="text-lg font-bold">
-                      ~{fmt(Number(solarData.annual_kwh_per_kwp) * 8)} kWh/yr
-                    </div>
-                    <div className="text-xs text-muted-foreground">Est. annual production (8 kWp)</div>
-                  </>
-                ) : (
-                  <span className="text-sm text-muted-foreground">No data</span>
-                )}
-              </div>
-
-              <div className="rounded-xl border p-4">
-                <div className="text-xs text-muted-foreground mb-1">Subsidies available</div>
-                <div className="text-lg font-bold text-green-600">
-                  {subsidyData.total_potential_eur
-                    ? `Up to ${new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(subsidyData.total_potential_eur))}`
-                    : "Check eligibility"}
+            {subsidyOk ? (
+              <>
+                <div className="text-2xl font-bold tabular-nums text-emerald-800 dark:text-emerald-200">
+                  {fmtEur(subsidyEur!)}
                 </div>
-                <div className="text-xs text-muted-foreground">KfW / BAFA programs</div>
-              </div>
-            </div>
+                <p className="text-xs text-muted-foreground mt-1">Potential (enricher)</p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Check eligibility</p>
+            )}
+          </div>
 
-            {/* Energy context */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Energy Context</h4>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-sm text-muted-foreground">
-                    Energy prices {ep.trend === "rising" ? "increasing" : ep.trend as string}
-                    {ep.local_retail_eur_kwh ? ` — ${fmt(Number(ep.local_retail_eur_kwh))} EUR/kWh` : ""}
-                  </span>
+          <div className="rounded-xl border border-violet-200/60 bg-gradient-to-br from-violet-50/90 to-white p-4 shadow-sm dark:from-violet-950/25 dark:to-background">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-violet-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Model retail
+              </span>
+            </div>
+            {hasSmard ? (
+              <>
+                <div className="text-2xl font-bold tabular-nums text-violet-900 dark:text-violet-100">
+                  {fmt(smardRetail!)}{" "}
+                  <span className="text-sm font-semibold text-violet-800/80">€/kWh</span>
                 </div>
-                {!!subsidyData.total_potential_eur && Number(subsidyData.total_potential_eur) > 0 && (
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="text-sm text-muted-foreground">
-                      Subsidies available — Up to {new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(subsidyData.total_potential_eur))}
-                    </span>
-                  </div>
-                )}
-                {!!energyData.retail_price_eur_kwh && Number(energyData.retail_price_eur_kwh) > 0.30 && (
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="text-sm text-muted-foreground">Regulation favorable — high self-consumption value</span>
-                  </div>
-                )}
-              </div>
+                <p className="text-xs text-muted-foreground mt-1">SMARD-based model</p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Awaiting energy model</p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-orange-200/60 bg-gradient-to-br from-orange-50/90 to-white p-4 shadow-sm dark:from-orange-950/25 dark:to-background">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-4 h-4 text-orange-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                vs market scan
+              </span>
             </div>
-
-            {/* Local utility */}
-            {lu.name && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Local Utility</h4>
-                <InfoRow label="Provider" value={lu.name} />
-                {lu.special_tariffs && <InfoRow label="Tariffs" value={lu.special_tariffs} />}
-              </div>
-            )}
-
-            {/* Measured roof geometry from 3D analysis */}
-            {roofAnalysis && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Roof geometry (3D analysis)</h4>
-                {hasRoofGeometry ? (
-                  <>
-                    {(totalRoofArea != null || roofPlanes.length > 0) && (
-                      <p className="text-xs text-muted-foreground mb-3">
-                        {totalRoofArea != null && (
-                          <span>Total roof area ~{fmt(totalRoofArea)} m²</span>
-                        )}
-                        {totalRoofArea != null && roofPlanes.length > 0 && " · "}
-                        {roofPlanes.length > 0 && (
-                          <span>
-                            {roofPlanes.length} plane{roofPlanes.length === 1 ? "" : "s"} detected
-                          </span>
-                        )}
-                      </p>
-                    )}
-                    <div className="overflow-x-auto rounded-lg border">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/40 text-left">
-                            <th className="py-2 px-2 font-medium text-muted-foreground">#</th>
-                            <th className="py-2 px-2 font-medium text-muted-foreground">Tilt</th>
-                            <th className="py-2 px-2 font-medium text-muted-foreground">Orientation</th>
-                            <th className="py-2 px-2 font-medium text-muted-foreground hidden sm:table-cell">Area</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {roofPlanes.map((p, i) => (
-                            <tr key={i} className="border-b border-border/50 last:border-0">
-                              <td className="py-2 px-2 tabular-nums">{i + 1}</td>
-                              <td className="py-2 px-2 tabular-nums">{p.tilt_deg.toFixed(0)}°</td>
-                              <td className="py-2 px-2">
-                                <span className="font-medium">{compassFromAzimuth(p.azimuth_deg)}</span>
-                                <span className="text-muted-foreground"> ({p.azimuth_deg.toFixed(0)}°)</span>
-                              </td>
-                              <td className="py-2 px-2 tabular-nums hidden sm:table-cell">
-                                {p.area_m2 != null ? `${fmt(p.area_m2)} m²` : "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Roof geometry will appear after 3D analysis completes.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* PVGIS location reference (not measured roof) */}
-            {solarData.optimal_angle != null && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Location solar reference (PVGIS)</h4>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Ideal angles for this latitude — not your measured roof.
+            {hasMarketTariff ? (
+              <>
+                <div className="text-2xl font-bold tabular-nums text-orange-900 dark:text-orange-100">
+                  {fmt(marketRetail!)}{" "}
+                  <span className="text-sm font-semibold text-orange-800/80">€/kWh</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {hasSmard && smardRetail != null && marketRetail != null
+                    ? marketRetail > smardRetail
+                      ? "Above model retail"
+                      : marketRetail < smardRetail
+                        ? "Below model retail"
+                        : "Matches model order of magnitude"
+                    : "AI web scan (not SMARD)"}
                 </p>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Ideal tilt (site)</span>
-                    <span className="font-medium">{String(solarData.optimal_angle)}°</span>
-                  </div>
-                  {solarData.optimal_azimuth != null && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">Ideal azimuth (site)</span>
-                      <span className="font-medium">{String(solarData.optimal_azimuth)}°</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No market tariff in briefing</p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+      </section>
 
-        {/* Map */}
-        {mapUrl && (
-          <Card>
-            <CardContent className="p-0 overflow-hidden rounded-xl">
+      {mapUrl && (
+        <Card className="overflow-hidden border shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Property location</CardTitle>
+            <p className="text-sm text-muted-foreground">{addressLine || lead.address}</p>
+          </CardHeader>
+          <CardContent className="p-0 px-4 pb-4">
+            <div className="rounded-xl border overflow-hidden shadow-inner">
               <iframe
+                title="Property map"
                 src={mapUrl}
-                className="w-full h-48"
+                className="w-full min-h-[14rem] h-56 md:h-72"
                 loading="lazy"
               />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Confidence */}
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-xs text-muted-foreground mb-2">Data confidence by source</div>
-            <div className="space-y-2">
-              {confidenceRows.map((item) => (
-                <div key={item.label} className="flex items-center gap-3">
-                  <span className="text-xs w-16 text-muted-foreground">{item.label}</span>
-                  <Progress
-                    value={item.conf === "high" ? 100 : item.conf === "medium" ? 60 : item.conf === "low" ? 30 : 5}
-                    className="h-1.5 flex-1"
-                  />
-                  <Badge
-                    variant={item.conf === "high" ? "default" : item.conf === "medium" ? "secondary" : "outline"}
-                    className="text-xs w-16 justify-center"
-                  >
-                    {item.conf}
-                  </Badge>
-                </div>
-              ))}
             </div>
           </CardContent>
         </Card>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 gap-y-2 text-sm">
+        {lead.product_interest && (
+          <Badge variant="secondary" className="text-xs font-medium">
+            {lead.product_interest}
+          </Badge>
+        )}
+        <span className="text-muted-foreground tabular-nums">
+          {[lead.zip_code, city].filter(Boolean).join(" ")}
+        </span>
+        <span className="text-muted-foreground hidden sm:inline">·</span>
+        <span className="text-muted-foreground text-xs sm:text-sm max-w-full">{lead.address}</span>
       </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Site and opportunity</CardTitle>
+              <p className="text-xs text-muted-foreground">Why this lead and what we know about the building.</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {drivers.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">What drives this opportunity</h4>
+                  <ul className="space-y-1.5">
+                    {drivers.map((d, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <svg className="w-4 h-4 mt-0.5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="text-muted-foreground">{d}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {buildingHasAny && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Property context</h4>
+                  <div className="rounded-lg border bg-muted/20 divide-y divide-border/60">
+                    {bp.estimated_era && (
+                      <InfoRow label="Era" value={bp.estimated_era} />
+                    )}
+                    {bp.building_type && <InfoRow label="Type" value={bp.building_type} />}
+                    {bp.likely_heating && <InfoRow label="Heating" value={bp.likely_heating} />}
+                    {bp.historic_preservation && bp.historic_preservation !== "NAV" && (
+                      <InfoRow label="Historic protection" value={bp.historic_preservation} />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {roofAnalysis && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Roof geometry (3D)</h4>
+                  {hasRoofGeometry ? (
+                    <>
+                      {(totalRoofArea != null || roofPlanes.length > 0) && (
+                        <p className="text-xs text-muted-foreground mb-3">
+                          {totalRoofArea != null && <span>Total roof ~{fmt(totalRoofArea)} m²</span>}
+                          {totalRoofArea != null && roofPlanes.length > 0 && " · "}
+                          {roofPlanes.length > 0 && (
+                            <span>
+                              {roofPlanes.length} plane{roofPlanes.length === 1 ? "" : "s"}
+                            </span>
+                          )}
+                        </p>
+                      )}
+                      <div className="overflow-x-auto rounded-lg border">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/40 text-left">
+                              <th className="py-2 px-2 font-medium text-muted-foreground">#</th>
+                              <th className="py-2 px-2 font-medium text-muted-foreground">Tilt</th>
+                              <th className="py-2 px-2 font-medium text-muted-foreground">Orientation</th>
+                              <th className="py-2 px-2 font-medium text-muted-foreground hidden sm:table-cell">Area</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {roofPlanes.map((p, i) => (
+                              <tr key={i} className="border-b border-border/50 last:border-0">
+                                <td className="py-2 px-2 tabular-nums">{i + 1}</td>
+                                <td className="py-2 px-2 tabular-nums">{p.tilt_deg.toFixed(0)}°</td>
+                                <td className="py-2 px-2">
+                                  <span className="font-medium">{compassFromAzimuth(p.azimuth_deg)}</span>
+                                  <span className="text-muted-foreground"> ({p.azimuth_deg.toFixed(0)}°)</span>
+                                </td>
+                                <td className="py-2 px-2 tabular-nums hidden sm:table-cell">
+                                  {p.area_m2 != null ? `${fmt(p.area_m2)} m²` : "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Roof geometry appears when 3D analysis completes.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {solarData.optimal_angle != null && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Location solar reference (PVGIS)</h4>
+                  <p className="text-xs text-muted-foreground mb-2">Ideal angles for this latitude — not measured roof.</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-muted-foreground text-xs">Ideal tilt (site)</span>
+                      <span className="font-medium tabular-nums">{String(solarData.optimal_angle)}°</span>
+                    </div>
+                    {solarData.optimal_azimuth != null && (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-muted-foreground text-xs">Ideal azimuth (site)</span>
+                        <span className="font-medium tabular-nums">{String(solarData.optimal_azimuth)}°</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Market and energy</CardTitle>
+              <p className="text-xs text-muted-foreground">Local prices and utility — from market enricher where available.</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {showPriceTrend && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Price trend</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {trendStr && trendStr !== "NAV" && (
+                      <Badge variant="outline" className="mr-2 text-xs capitalize">
+                        {trendStr}
+                      </Badge>
+                    )}
+                    {trendDetailStr && trendDetailStr !== "NAV" ? trendDetailStr : null}
+                    {!trendDetailStr && trendStr === "rising" && "Energy prices increasing in this context."}
+                  </p>
+                </div>
+              )}
+
+              {lu.name && (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Local utility</h4>
+                  <InfoRow label="Provider" value={lu.name} />
+                  {(lu.local_tariffs || lu.special_tariffs) && (
+                    <InfoRow label="Tariffs" value={(lu.local_tariffs ?? lu.special_tariffs) as string} />
+                  )}
+                </div>
+              )}
+
+              {!!energyData.retail_price_eur_kwh &&
+                typeof energyData.retail_price_eur_kwh === "number" &&
+                energyData.retail_price_eur_kwh > 0.3 &&
+                !trendStr && (
+                  <p className="text-xs text-muted-foreground">
+                    Elevated model retail supports the case for self-consumption and solar.
+                  </p>
+                )}
+
+              {!showPriceTrend &&
+                !lu.name &&
+                !(
+                  typeof energyData.retail_price_eur_kwh === "number" &&
+                  energyData.retail_price_eur_kwh > 0.3 &&
+                  !trendStr
+                ) && (
+                  <p className="text-xs text-muted-foreground">
+                    No local utility or price trend from the market enricher in this briefing.
+                  </p>
+                )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <details className="group rounded-xl border bg-card text-sm">
+        <summary className="cursor-pointer list-none px-4 py-3 font-medium flex items-center justify-between gap-2">
+          <span>
+            Data confidence —{" "}
+            <span className="tabular-nums text-muted-foreground font-normal">
+              {highConfidenceCount} of {confidenceRows.length} sources high
+            </span>
+          </span>
+          <svg
+            className="w-4 h-4 text-muted-foreground shrink-0 transition-transform group-open:rotate-180"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </summary>
+        <div className="px-4 pb-4 pt-0 border-t border-border/60">
+          <div className="space-y-2 pt-3">
+            {confidenceRows.map((item) => (
+              <div key={item.label} className="flex items-center gap-3">
+                <span className="text-xs w-20 text-muted-foreground shrink-0">{item.label}</span>
+                <Progress
+                  value={item.conf === "high" ? 100 : item.conf === "medium" ? 60 : item.conf === "low" ? 30 : 5}
+                  className="h-1.5 flex-1"
+                />
+                <Badge
+                  variant={item.conf === "high" ? "default" : item.conf === "medium" ? "secondary" : "outline"}
+                  className="text-xs w-16 justify-center shrink-0"
+                >
+                  {item.conf}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

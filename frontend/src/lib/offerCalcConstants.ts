@@ -3,6 +3,8 @@
  * Keep in sync when changing server-side offer logic.
  */
 export const HOUSEHOLD_DEFAULT_KWH = 4_000;
+/** Illustrative only — not from live API; typical German household electricity use (order of magnitude). */
+export const TYPICAL_DE_HOUSEHOLD_KWH_ILLUSTRATIVE = 3_100;
 export const FEED_IN_TARIFF_EUR = 0.081;
 export const CO2_KG_PER_KWH_GRID = 0.4;
 /** Approx. kW per m² panel area — used for roof utilization (backend uses kwp / 0.18). */

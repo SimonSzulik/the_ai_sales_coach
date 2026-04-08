@@ -81,12 +81,16 @@ type Briefing = {
 
 export default function BriefingPage() {
   const { id } = useParams<{ id: string }>();
-  const { activeSection, setBriefing: setCtxBriefing, setLeads } = useDashboard();
+  const { activeSection, setBriefing: setCtxBriefing, setLeads, setActiveSection } = useDashboard();
   const [briefing, setBriefing] = useState<Briefing | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showFinancing, setShowFinancing] = useState(false);
   const financingRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setActiveSection("overview");
+  }, [id, setActiveSection]);
 
   const poll = useCallback(async () => {
     try {
@@ -187,7 +191,6 @@ export default function BriefingPage() {
           subsidies={e.subsidies}
           marketContext={e.market_context}
           roofAnalysis={e.roof_analysis}
-          score={e.opportunity_score}
           drivers={e.opportunity_drivers}
         />
       )}
@@ -248,7 +251,7 @@ export default function BriefingPage() {
         <MarketContext data={e.market_context.data as never} />
       )}
 
-      {/* AI Assistant */}
+      {/* Pitch Assistant */}
       {activeSection === "assistant" && (
         <div className="mt-4">
           <SalesCoach coach={briefing.coach} />

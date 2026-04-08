@@ -25,7 +25,7 @@ export default function SalesCoach({ coach }: Props) {
     <div className="space-y-4 mt-4">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold">Sales Guideline</h2>
+        <h2 className="text-lg font-semibold">Pitch Assistant</h2>
         <Badge variant="secondary" className="text-xs">AI-Generated</Badge>
       </div>
 
