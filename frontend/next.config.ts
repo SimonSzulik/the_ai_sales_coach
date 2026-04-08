@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         destination: "https://api-qhack.mehdy.eu/api/:path*",
       },
+      {
+        source: "/roof_outputs/:path*",
+        destination: "https://api-qhack.mehdy.eu/roof_outputs/:path*",
+      },
     ];
   },
 };
