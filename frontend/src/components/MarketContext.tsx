@@ -61,7 +61,7 @@ const adoptionBadge: Record<string, "default" | "secondary" | "outline"> = {
 };
 
 export default function MarketContext({ data }: Props) {
-  if (!data || data.error) return null;
+  if (!data || 'error' in data) return null;
 
   const bp = data.building_profile;
   const ep = data.energy_prices;
