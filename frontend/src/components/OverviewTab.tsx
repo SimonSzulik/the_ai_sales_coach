@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { compassFromAzimuth } from "@/lib/roofGeometry";
 import { HOUSEHOLD_DEFAULT_KWH, TYPICAL_DE_HOUSEHOLD_KWH_ILLUSTRATIVE } from "@/lib/offerCalcConstants";
+import { getMapEmbedUrl } from "@/lib/api";
 
 interface Props {
   lead: {
@@ -125,10 +127,20 @@ export default function OverviewTab({
   const city = geoData.city as string | undefined;
   const lat = geoData.latitude as number | undefined;
   const lon = geoData.longitude as number | undefined;
-  const mapUrl =
-    lat && lon
-      ? `https://www.openstreetmap.org/export/embed.html?bbox=${lon - 0.005},${lat - 0.003},${lon + 0.005},${lat + 0.003}&layer=mapnik&marker=${lat},${lon}`
-      : null;
+  const [mapUrl, setMapUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (lat == null || lon == null) {
+      setMapUrl(null);
+      return;
+    }
+    let cancelled = false;
+    getMapEmbedUrl(lat, lon, { zoom: 19, maptype: "satellite" }).then((url) => {
+      if (!cancelled) setMapUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lat, lon]);
 
   const roofData = roofAnalysis?.data;
   const { planes: roofPlanes, error: roofError, totalRoofArea } = parseRoofPlanes(roofData);

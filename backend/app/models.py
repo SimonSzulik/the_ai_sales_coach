@@ -236,17 +236,9 @@ class DataTrustEntry(BaseModel):
 # Full Briefing Response
 # ---------------------------------------------------------------------------
 
-class SanityCheck(BaseModel):
-    name: str
-    status: str  # "pass" | "warn" | "fail" | "info"
-    message: str
-    detail: str | None = None
-
-
 class BriefingResponse(BaseModel):
     lead: LeadResponse
     enrichment: EnrichmentBundle
     offers: list[OfferWithFinancing] = Field(default_factory=list)
     coach: SalesCoachOutput = Field(default_factory=SalesCoachOutput)
     data_trust: list[DataTrustEntry] = Field(default_factory=list)
-    sanity_checks: list[SanityCheck] = Field(default_factory=list)

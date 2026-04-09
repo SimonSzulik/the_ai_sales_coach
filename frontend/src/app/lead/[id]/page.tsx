@@ -20,7 +20,6 @@ import MarketContext from "@/components/MarketContext";
 import SalesCoach from "@/components/SalesCoach";
 import RoofAnalysisTab from "@/components/RoofAnalysisTab";
 import OsintCard, { OsintData } from "@/components/OsintCard";
-import SanityChecks, { SanityCheck } from "@/components/SanityChecks";
 import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -87,7 +86,6 @@ type Briefing = {
     timestamp: string;
     fallback_used: boolean;
   }[];
-  sanity_checks?: SanityCheck[];
 };
 
 export default function BriefingPage() {
@@ -266,12 +264,9 @@ export default function BriefingPage() {
               </div>
             </div>
 
-            {(e.osint || briefing.sanity_checks?.length) && (
+            {e.osint && (
               <div className="grid gap-5 lg:grid-cols-2">
-                {e.osint && <OsintCard osint={e.osint} />}
-                {briefing.sanity_checks && briefing.sanity_checks.length > 0 && (
-                  <SanityChecks checks={briefing.sanity_checks} />
-                )}
+                <OsintCard osint={e.osint} />
               </div>
             )}
           </div>

@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getMapEmbedUrl } from "@/lib/api";
 
 interface Props {
   lead: { name: string; address: string; zip_code: string; product_interest?: string };
@@ -20,10 +22,20 @@ interface Props {
 export default function LeadSnapshot({ lead, geo }: Props) {
   const lat = geo.data.latitude;
   const lon = geo.data.longitude;
-  const mapUrl =
-    lat && lon
-      ? `https://www.openstreetmap.org/export/embed.html?bbox=${lon - 0.005},${lat - 0.003},${lon + 0.005},${lat + 0.003}&layer=mapnik&marker=${lat},${lon}`
-      : null;
+  const [mapUrl, setMapUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (lat == null || lon == null) {
+      setMapUrl(null);
+      return;
+    }
+    let cancelled = false;
+    getMapEmbedUrl(lat, lon, { zoom: 18, maptype: "roadmap" }).then((url) => {
+      if (!cancelled) setMapUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lat, lon]);
 
   return (
     <Card>

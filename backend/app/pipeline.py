@@ -24,7 +24,6 @@ from app.enrichers.osint import enrich_osint
 from app.engine.offers import build_offers
 from app.engine.financing import compute_financing
 from app.coach.sales_coach import generate_coaching
-from app.sanity import run_sanity_checks
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +160,6 @@ async def run_pipeline(lead_id: str) -> None:
             coach_output = await generate_coaching(lead_resp, bundle, offers_with_financing)
 
             trust = _build_trust(bundle)
-            sanity = run_sanity_checks(lead_resp, bundle, offers_with_financing)
 
             briefing = BriefingResponse(
                 lead=lead_resp,
@@ -169,7 +167,6 @@ async def run_pipeline(lead_id: str) -> None:
                 offers=offers_with_financing,
                 coach=coach_output,
                 data_trust=trust,
-                sanity_checks=sanity,
             )
 
             row.enrichment_data = bundle.model_dump(mode="json")
@@ -187,7 +184,7 @@ async def run_pipeline(lead_id: str) -> None:
 async def recompute_offers_only(
     lead_id: str, annual_electricity_kwh: float
 ) -> BriefingResponse | None:
-    """Rebuild offers + financing + sanity checks for an already-enriched lead."""
+    """Rebuild offers + financing for an already-enriched lead."""
     async with async_session() as db:
         row = await db.get(LeadRow, lead_id)
         if not row or row.status != "done" or not row.enrichment_data:
@@ -219,7 +216,6 @@ async def recompute_offers_only(
             coach_output = await generate_coaching(lead_resp, bundle, offers_with_financing)
 
         trust = _build_trust(bundle)
-        sanity = run_sanity_checks(lead_resp, bundle, offers_with_financing)
 
         briefing = BriefingResponse(
             lead=lead_resp,
@@ -227,7 +223,6 @@ async def recompute_offers_only(
             offers=offers_with_financing,
             coach=coach_output,
             data_trust=trust,
-            sanity_checks=sanity,
         )
 
         row.annual_electricity_kwh = annual_electricity_kwh

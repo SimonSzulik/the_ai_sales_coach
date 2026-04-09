@@ -22,6 +22,15 @@ export default function LeadForm() {
     setLocationError(false);
 
     const fd = new FormData(e.currentTarget);
+
+    const rawName = ((fd.get("name") as string) ?? "").trim();
+    const nameParts = rawName.split(/\s+/).filter((p) => p.length > 0);
+    if (nameParts.length < 2) {
+      setError("Please enter both a first and a last name.");
+      setLoading(false);
+      return;
+    }
+
     const usageRaw = (fd.get("annual_electricity_kwh") as string)?.trim();
     let annual_electricity_kwh: number | undefined;
     if (usageRaw) {
@@ -35,7 +44,7 @@ export default function LeadForm() {
     }
 
     const payload = {
-      name: fd.get("name") as string,
+      name: rawName,
       address: fd.get("address") as string,
       zip_code: fd.get("zip_code") as string,
       product_interest: (fd.get("product_interest") as string) || undefined,
@@ -71,8 +80,16 @@ export default function LeadForm() {
       <CardContent>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="name">Customer Name</Label>
-            <Input id="name" name="name" placeholder="Max Mustermann" required />
+            <Label htmlFor="name">Customer Full Name</Label>
+            <Input
+              id="name"
+              name="name"
+              placeholder="Max Mustermann"
+              required
+              pattern="^\s*\S+\s+\S+.*$"
+              title="Please enter both a first and a last name."
+            />
+            <p className="text-xs text-muted-foreground">First and last name are required.</p>
           </div>
 
           <div className="grid gap-2">
