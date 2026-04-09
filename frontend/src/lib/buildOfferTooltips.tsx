@@ -14,6 +14,9 @@ import {
 } from "@/lib/offerCalcConstants";
 import { compareRowFallbackLine, sectionTitleFallback } from "@/lib/offerMetricExplain";
 
+/** Share of PV production that coincides with daytime household load (no storage). */
+const DAYTIME_OVERLAP = 0.35;
+
 /** Loose shape for `briefing.enrichment` (see `page.tsx`). */
 export type EnrichmentInput = {
   geo?: { data?: Record<string, unknown> };
@@ -96,20 +99,33 @@ function tierCapKwp(tier: string): number {
   return MAX_STARTER_KWP;
 }
 
-/** Same logic as `OfferCards` `recalcSelfConsumption` — keep in sync. */
+/** Same logic as the backend `_self_consumption_rate` — keep in sync.
+ *
+ * - Demand ceiling: can't self-consume more than the household actually uses.
+ * - Daytime overlap (~35%) limits direct use without storage.
+ * - Battery shifts ~250 kWh/yr per kWh of pack from export to self-use.
+ * - Heat pump adds flexible load (+8pp) and raises the tech cap.
+ */
 export function recalcSelfConsumption(
   annualKwh: number,
   batteryKwh: number,
   hasHeatPump: boolean,
   householdKwh: number,
 ): number {
-  const consumption = householdKwh + (hasHeatPump ? HEAT_PUMP_LOAD_KWH : 0);
   if (annualKwh <= 0) return 0;
-  const baseSc = Math.min(0.3, consumption / annualKwh);
+
+  const consumption = householdKwh + (hasHeatPump ? HEAT_PUMP_LOAD_KWH : 0);
+
+  const demandCeiling = Math.min(1, consumption / annualKwh);
+
+  const baseSc = Math.min(demandCeiling, DAYTIME_OVERLAP);
+
   const batteryBoost = (batteryKwh * BATTERY_KWH_SHIFT_PER_KWH_PACK) / annualKwh;
   const hpBoost = hasHeatPump ? 0.08 : 0;
-  const cap = hasHeatPump ? 0.9 : batteryKwh > 0 ? 0.75 : 0.4;
-  return Math.min(baseSc + batteryBoost + hpBoost, cap);
+
+  const techCap = hasHeatPump ? 0.9 : batteryKwh > 0 ? 0.85 : 0.5;
+
+  return Math.min(baseSc + batteryBoost + hpBoost, demandCeiling, techCap);
 }
 
 export function recalcSavings(
@@ -295,11 +311,12 @@ export function buildSliderTooltipContent(
   const feed = offer.feed_in_tariff_eur ?? FEED_IN_TARIFF_EUR;
 
   const consumption = householdKwh + (hp ? HEAT_PUMP_LOAD_KWH : 0);
-  const baseSc = annual > 0 ? Math.min(0.3, consumption / annual) : 0;
+  const demandCeiling = annual > 0 ? Math.min(1, consumption / annual) : 0;
+  const baseSc = Math.min(demandCeiling, DAYTIME_OVERLAP);
   const batteryBoost = annual > 0 ? (bat * BATTERY_KWH_SHIFT_PER_KWH_PACK) / annual : 0;
   const hpBoost = hp ? 0.08 : 0;
-  const cap = hp ? 0.9 : bat > 0 ? 0.75 : 0.4;
-  const scRaw = Math.min(baseSc + batteryBoost + hpBoost, cap);
+  const techCap = hp ? 0.9 : bat > 0 ? 0.85 : 0.5;
+  const scRaw = Math.min(baseSc + batteryBoost + hpBoost, demandCeiling, techCap);
   const sc = recalcSelfConsumption(annual, bat, hp, householdKwh);
 
   const selfKwh = annual * sc;
@@ -321,21 +338,25 @@ export function buildSliderTooltipContent(
           {hp ? ` + ${fmtInt(HEAT_PUMP_LOAD_KWH)} (HP load)` : ""} = <strong>{fmtInt(consumption)} kWh/yr</strong>
         </p>
         <p>
-          <span className="font-medium">2. Base self-consumption rate</span> = min(30%, consumption ÷ production) = min(0.30,{" "}
-          {consumption}/{annual}) ≈ {(baseSc * 100).toFixed(1)}%
+          <span className="font-medium">2. Demand ceiling</span> = min(1, consumption ÷ production) = min(1, {consumption}/{annual}) ≈ {(demandCeiling * 100).toFixed(1)}%
+          <br />
+          <span className="text-muted-foreground">Physical maximum — you can&apos;t self-consume more than you use.</span>
         </p>
         <p>
-          <span className="font-medium">3. Battery boost</span> = (battery_kWh × {BATTERY_KWH_SHIFT_PER_KWH_PACK}) ÷ production = (
-          {bat} × {BATTERY_KWH_SHIFT_PER_KWH_PACK}) ÷ {annual} ≈ {(batteryBoost * 100).toFixed(1)} pp
+          <span className="font-medium">3. Base self-consumption</span> = min(demand ceiling, 35% daytime overlap) ≈ {(baseSc * 100).toFixed(1)}%
+          <br />
+          <span className="text-muted-foreground">Without a battery, only ~35% of PV coincides with household load.</span>
+        </p>
+        <p>
+          <span className="font-medium">4. Battery boost</span> = (battery_kWh × {BATTERY_KWH_SHIFT_PER_KWH_PACK}) ÷ production = ({bat} × {BATTERY_KWH_SHIFT_PER_KWH_PACK}) ÷ {annual} ≈ {(batteryBoost * 100).toFixed(1)} pp
         </p>
         {hp ? (
           <p>
-            <span className="font-medium">4. Heat-pump boost</span> = +8 pp (capped with base + battery)
+            <span className="font-medium">5. Heat-pump boost</span> = +8 pp (flexible load)
           </p>
         ) : null}
         <p>
-          <span className="font-medium">{hp ? "5" : "4"}. Cap</span> = {hp ? "90% (HP)" : bat > 0 ? "75% (battery)" : "40% (solar only)"}{" "}
-          → raw sum ≈ {(scRaw * 100).toFixed(1)}% → <strong>{sim.scPct}%</strong> (rounded, matches {(sc * 100).toFixed(2)}%)
+          <span className="font-medium">{hp ? "6" : "5"}. Final</span> = min(base + boosts, demand ceiling, tech cap {hp ? "90%" : bat > 0 ? "85%" : "50%"}) ≈ {(scRaw * 100).toFixed(1)}% → <strong>{sim.scPct}%</strong> (matches {(sc * 100).toFixed(2)}%)
         </p>
       </div>
 

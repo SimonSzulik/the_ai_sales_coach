@@ -23,6 +23,10 @@ MAX_STARTER_KWP = 10.0
 MAX_REC_KWP = 15.0
 MAX_PREM_KWP = 20.0
 
+HEAT_PUMP_LOAD_KWH = 3_000
+DAYTIME_OVERLAP = 0.35
+BATTERY_KWH_SHIFT_PER_KWH_PACK = 250
+
 
 _TILT_ROWS = [0, 10, 20, 30, 35, 45, 60, 90]
 
@@ -127,24 +131,27 @@ def _self_consumption_rate(
 ) -> float:
     """Realistic self-consumption model.
 
-    Without battery: ~30% baseline
-    Each kWh battery shifts ~250 kWh/yr from export to self-use.
-    Heat pump adds flexible load, boosting self-consumption.
+    - Demand ceiling: can't self-consume more than the household actually uses.
+    - Daytime overlap (~35%) limits direct use without storage.
+    - Battery shifts ~250 kWh/yr per kWh of pack from export to self-use.
+    - Heat pump adds flexible load (+8pp) and raises the tech cap.
     """
-    consumption = household_kwh
-    if has_heat_pump:
-        consumption += 3_000
-
     if annual_kwh <= 0:
         return 0.0
 
-    base_sc = min(0.30, consumption / annual_kwh) if annual_kwh > 0 else 0.30
-    battery_boost = (battery_kwh * 250) / annual_kwh if annual_kwh > 0 else 0.0
-    hp_boost = 0.08 if has_heat_pump else 0.0
-    sc = base_sc + battery_boost + hp_boost
+    consumption = household_kwh + (HEAT_PUMP_LOAD_KWH if has_heat_pump else 0)
 
-    cap = 0.90 if has_heat_pump else (0.75 if battery_kwh > 0 else 0.40)
-    return round(min(sc, cap), 2)
+    demand_ceiling = min(1.0, consumption / annual_kwh)
+
+    base_sc = min(demand_ceiling, DAYTIME_OVERLAP)
+
+    battery_boost = (battery_kwh * BATTERY_KWH_SHIFT_PER_KWH_PACK) / annual_kwh
+    hp_boost = 0.08 if has_heat_pump else 0.0
+
+    tech_cap = 0.90 if has_heat_pump else (0.85 if battery_kwh > 0 else 0.50)
+
+    sc = min(base_sc + battery_boost + hp_boost, demand_ceiling, tech_cap)
+    return round(sc, 2)
 
 
 def _compute_savings(
