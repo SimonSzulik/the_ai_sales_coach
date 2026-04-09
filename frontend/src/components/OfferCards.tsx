@@ -67,9 +67,9 @@ function fmt(n: number) {
 }
 
 const TIER_IMAGE: Record<string, { src: string; alt: string }> = {
-  starter: { src: "/offers/starter.png", alt: "House with rooftop solar panels" },
-  recommended: { src: "/offers/recommended.png", alt: "House with rooftop solar panels and battery storage" },
-  premium: { src: "/offers/premium.png", alt: "House with rooftop solar panels, battery storage and heat pump" },
+  starter: { src: "/offers/starter.webp", alt: "House with rooftop solar panels" },
+  recommended: { src: "/offers/recommended.webp", alt: "House with rooftop solar panels and battery storage" },
+  premium: { src: "/offers/premium.webp", alt: "House with rooftop solar panels, battery storage and heat pump" },
 };
 
 function HouseIllustration({ tier }: { tier: string }) {
@@ -431,3 +431,4 @@ export default function OfferCards({
     </div>
   );
 }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
