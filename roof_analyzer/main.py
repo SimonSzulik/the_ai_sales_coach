@@ -40,8 +40,8 @@ def analyze_address(address: str, api_key: str | None = None, out_dir: str = "."
     raw_mesh = fetch_meshes(cfg)
     print(f"      -> {len(raw_mesh.faces)} Dreiecke geladen")
 
-    print("[3/6] OSM-Footprint laden ...")
-    fp_lla = fetch_building_footprint(g.lat, g.lon)
+    print("[3/6] Gebäude-Footprint laden (Google Solar API) ...")
+    fp_lla = fetch_building_footprint(g.lat, g.lon, api_key=key)
     fp_enu = None
     if fp_lla is not None:
         fp_enu = footprint_to_enu(fp_lla, g.lat, g.lon)
@@ -52,7 +52,7 @@ def analyze_address(address: str, api_key: str | None = None, out_dir: str = "."
         from shapely.geometry import Polygon as ShpPoly
         half = 9.0
         fp_enu = ShpPoly([(-half, -half), (half, -half), (half, half), (-half, half)])
-        print(f"      [warn] Kein OSM-Footprint - Fallback: {int(half*2)}x{int(half*2)}m Quadrat um Ziel.")
+        print(f"      [warn] Kein Solar-API-Footprint - Fallback: {int(half*2)}x{int(half*2)}m Quadrat um Ziel.")
 
     print("[4/6] Mesh -> ENU + Clipping")
     enu_mesh = mesh_to_enu(raw_mesh, g.lat, g.lon)
