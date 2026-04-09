@@ -19,6 +19,8 @@ import MarketContext from "@/components/MarketContext";
 
 import SalesCoach from "@/components/SalesCoach";
 import RoofAnalysisTab from "@/components/RoofAnalysisTab";
+import OsintCard, { OsintData } from "@/components/OsintCard";
+import SanityChecks, { SanityCheck } from "@/components/SanityChecks";
 import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -37,6 +39,7 @@ type Briefing = {
     subsidies: { confidence: string; data: Record<string, unknown> };
     market_context: { confidence: string; data: Record<string, unknown> };
     roof_analysis?: { confidence: string; data: Record<string, unknown> };
+    osint?: { confidence: string; data: OsintData };
     opportunity_score: number;
     opportunity_drivers: string[];
   };
@@ -84,6 +87,7 @@ type Briefing = {
     timestamp: string;
     fallback_used: boolean;
   }[];
+  sanity_checks?: SanityCheck[];
 };
 
 export default function BriefingPage() {
@@ -261,6 +265,15 @@ export default function BriefingPage() {
                 <ReadyCTA name={briefing.lead.name} />
               </div>
             </div>
+
+            {(e.osint || briefing.sanity_checks?.length) && (
+              <div className="grid gap-5 lg:grid-cols-2">
+                {e.osint && <OsintCard osint={e.osint} />}
+                {briefing.sanity_checks && briefing.sanity_checks.length > 0 && (
+                  <SanityChecks checks={briefing.sanity_checks} />
+                )}
+              </div>
+            )}
           </div>
         </TooltipProvider>
       )}

@@ -1,15 +1,11 @@
-"""Market & regulatory context enricher — two parallel AI calls with web search."""
+"""Market & regulatory context enricher — two parallel LLM calls with web search."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import re
 
-from anthropic import AsyncAnthropic
-
-from app.config import get_settings
+from app.llm import LLMError, complete_json, llm_configured
 from app.models import Confidence, EnrichmentResult
 
 logger = logging.getLogger(__name__)
@@ -122,47 +118,17 @@ Respond ONLY with valid JSON matching this exact schema:
 """
 
 
-def _extract_json(response) -> dict:
-    """Extract JSON from an Anthropic response that may contain web search blocks."""
-    last_text = ""
-    for block in response.content:
-        if getattr(block, "type", None) == "text":
-            last_text = block.text
-
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", last_text)
-    raw = match.group(1).strip() if match else last_text.strip()
-    return json.loads(raw)
-
-
-async def _call_with_web_search(
-    client: AsyncAnthropic,
-    system_prompt: str,
-    user_msg: str,
-) -> dict:
-    """Make a single Anthropic call with web search enabled."""
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=4096,
-        temperature=0.3,
-        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}],
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_msg}],
-    )
-    return _extract_json(response)
-
-
 async def enrich_market_context(
     address: str,
     zip_code: str,
     product_interest: str | None,
 ) -> EnrichmentResult:
-    settings = get_settings()
-    if not settings.anthropic_api_key:
+    if not llm_configured():
         return EnrichmentResult(
             source="market_context_ai",
             confidence=Confidence.NONE,
             fallback_used=True,
-            data={"error": "ANTHROPIC_API_KEY not configured"},
+            data={"error": "No LLM provider configured"},
         )
 
     user_msg = (
@@ -171,18 +137,20 @@ async def enrich_market_context(
     )
 
     try:
-        client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-
         prices_data, regulations_data = await asyncio.gather(
-            _call_with_web_search(
-                client,
-                PRICES_PROMPT,
-                user_msg + "Find energy prices, building profile, and local utility for this address.",
+            complete_json(
+                system=PRICES_PROMPT,
+                user=user_msg + "Find energy prices, building profile, and local utility for this address.",
+                max_tokens=4096,
+                temperature=0.3,
+                web_search=True,
             ),
-            _call_with_web_search(
-                client,
-                REGULATIONS_PROMPT,
-                user_msg + "Find local regulations, municipal programs, and why-now triggers for this address.",
+            complete_json(
+                system=REGULATIONS_PROMPT,
+                user=user_msg + "Find local regulations, municipal programs, and why-now triggers for this address.",
+                max_tokens=4096,
+                temperature=0.3,
+                web_search=True,
             ),
         )
 
@@ -219,7 +187,7 @@ async def enrich_market_context(
             confidence=Confidence.MEDIUM,
             data=merged,
         )
-    except Exception as exc:
+    except (LLMError, Exception) as exc:
         logger.exception("Market context enrichment failed")
         return EnrichmentResult(
             source="market_context_ai",

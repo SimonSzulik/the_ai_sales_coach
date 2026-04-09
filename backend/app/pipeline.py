@@ -4,18 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 
-from app.config import get_settings
 from app.database import async_session
 from app.models import (
     BriefingResponse,
-    Confidence,
     DataTrustEntry,
     EnrichmentBundle,
-    EnrichmentResult,
     LeadResponse,
     LeadRow,
+    OfferWithFinancing,
 )
 from app.enrichers.geocoding import enrich_geo
 from app.enrichers.solar import enrich_solar
@@ -23,9 +20,11 @@ from app.enrichers.energy_prices import enrich_energy
 from app.enrichers.subsidies import enrich_subsidies
 from app.enrichers.market_context import enrich_market_context
 from app.enrichers.roof_analysis import enrich_roof
+from app.enrichers.osint import enrich_osint
 from app.engine.offers import build_offers
 from app.engine.financing import compute_financing
 from app.coach.sales_coach import generate_coaching
+from app.sanity import run_sanity_checks
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +49,11 @@ def _score(bundle: EnrichmentBundle) -> tuple[float, list[str]]:
         score += 15
         drivers.append(f"Significant subsidies available ({subs['total_potential_eur']:.0f} EUR)")
 
+    osint = bundle.osint.data
+    if osint.get("ev_status") == "yes":
+        score += 5
+        drivers.append("Customer already owns an EV (OSINT)")
+
     confidence_vals = {"high": 10, "medium": 5, "low": 0, "none": -5}
     for field in [bundle.geo, bundle.solar, bundle.energy, bundle.subsidies]:
         score += confidence_vals.get(field.confidence.value, 0)
@@ -66,6 +70,7 @@ def _build_trust(bundle: EnrichmentBundle) -> list[DataTrustEntry]:
         ("Subsidies", bundle.subsidies),
         ("Market Context", bundle.market_context),
         ("Roof Analysis", bundle.roof_analysis),
+        ("OSINT (EV)", bundle.osint),
     ]:
         entries.append(DataTrustEntry(
             enricher=enricher_name,
@@ -75,6 +80,31 @@ def _build_trust(bundle: EnrichmentBundle) -> list[DataTrustEntry]:
             fallback_used=result.fallback_used,
         ))
     return entries
+
+
+def _build_offers_and_financing(
+    bundle: EnrichmentBundle, household_kwh: float | None = None
+) -> list[OfferWithFinancing]:
+    if household_kwh is not None:
+        offers_raw = build_offers(bundle, household_kwh=household_kwh)
+    else:
+        offers_raw = build_offers(bundle)
+    subsidy_total = bundle.subsidies.data.get("total_potential_eur", 0.0)
+
+    out: list[OfferWithFinancing] = []
+    for offer in offers_raw:
+        # If OSINT confirms EV ownership, the wallbox is already in place →
+        # for the premium tier we strip its CapEx so financing reflects reality.
+        ev_status = bundle.osint.data.get("ev_status")
+        if ev_status == "yes" and offer.tier.value == "premium":
+            wallbox_components = [c for c in offer.components if "wallbox" in c.name.lower()]
+            for c in wallbox_components:
+                offer.capex_eur = max(0.0, offer.capex_eur - c.unit_cost_eur)
+                offer.components.remove(c)
+
+        financing = compute_financing(offer, subsidy_total)
+        out.append(OfferWithFinancing(offer=offer, financing=financing))
+    return out
 
 
 async def run_pipeline(lead_id: str) -> None:
@@ -89,16 +119,22 @@ async def run_pipeline(lead_id: str) -> None:
         await db.commit()
 
         try:
-            geo_result, solar_result, energy_result, subsidy_result, market_ctx_result, roof_result = (
-                await asyncio.gather(
-                    enrich_geo(row.address, row.zip_code),
-                    enrich_solar(None, None),
-                    enrich_energy(),
-                    # NEU: Subsidies bekommt jetzt Adresse, PLZ und Interesse
-                    enrich_subsidies(row.address, row.zip_code, row.product_interest),
-                    enrich_market_context(row.address, row.zip_code, row.product_interest),
-                    enrich_roof(row.address, row.zip_code, row.id),
-                )
+            (
+                geo_result,
+                solar_result,
+                energy_result,
+                subsidy_result,
+                market_ctx_result,
+                roof_result,
+                osint_result,
+            ) = await asyncio.gather(
+                enrich_geo(row.address, row.zip_code),
+                enrich_solar(None, None),
+                enrich_energy(),
+                enrich_subsidies(row.address, row.zip_code, row.product_interest),
+                enrich_market_context(row.address, row.zip_code, row.product_interest),
+                enrich_roof(row.address, row.zip_code, row.id),
+                enrich_osint(row.name, row.address, row.zip_code),
             )
 
             lat = geo_result.data.get("latitude")
@@ -113,22 +149,19 @@ async def run_pipeline(lead_id: str) -> None:
                 subsidies=subsidy_result,
                 market_context=market_ctx_result,
                 roof_analysis=roof_result,
+                osint=osint_result,
             )
             bundle.opportunity_score, bundle.opportunity_drivers = _score(bundle)
 
-            offers_raw = build_offers(bundle)
-            offers_with_financing = []
-            for offer in offers_raw:
-                subsidy_total = bundle.subsidies.data.get("total_potential_eur", 0.0)
-                financing = compute_financing(offer, subsidy_total)
-                from app.models import OfferWithFinancing
-                offers_with_financing.append(OfferWithFinancing(offer=offer, financing=financing))
+            offers_with_financing = _build_offers_and_financing(
+                bundle, household_kwh=row.annual_electricity_kwh
+            )
 
             lead_resp = LeadResponse.model_validate(row)
-
             coach_output = await generate_coaching(lead_resp, bundle, offers_with_financing)
 
             trust = _build_trust(bundle)
+            sanity = run_sanity_checks(lead_resp, bundle, offers_with_financing)
 
             briefing = BriefingResponse(
                 lead=lead_resp,
@@ -136,6 +169,7 @@ async def run_pipeline(lead_id: str) -> None:
                 offers=offers_with_financing,
                 coach=coach_output,
                 data_trust=trust,
+                sanity_checks=sanity,
             )
 
             row.enrichment_data = bundle.model_dump(mode="json")
@@ -148,3 +182,55 @@ async def run_pipeline(lead_id: str) -> None:
             row.status = "error"
             row.briefing_data = {"error": "Pipeline failed"}
             await db.commit()
+
+
+async def recompute_offers_only(
+    lead_id: str, annual_electricity_kwh: float
+) -> BriefingResponse | None:
+    """Rebuild offers + financing + sanity checks for an already-enriched lead."""
+    async with async_session() as db:
+        row = await db.get(LeadRow, lead_id)
+        if not row or row.status != "done" or not row.enrichment_data:
+            return None
+
+        try:
+            bundle = EnrichmentBundle.model_validate(row.enrichment_data)
+        except Exception:
+            logger.exception("Failed to load enrichment bundle for %s", lead_id)
+            return None
+
+        offers_with_financing = _build_offers_and_financing(
+            bundle, household_kwh=annual_electricity_kwh
+        )
+
+        # Reuse the previously generated coach output if present, otherwise regen.
+        coach_output = None
+        if row.briefing_data and isinstance(row.briefing_data, dict):
+            coach_data = row.briefing_data.get("coach")
+            if coach_data:
+                from app.models import SalesCoachOutput
+                try:
+                    coach_output = SalesCoachOutput.model_validate(coach_data)
+                except Exception:
+                    coach_output = None
+
+        lead_resp = LeadResponse.model_validate(row)
+        if coach_output is None:
+            coach_output = await generate_coaching(lead_resp, bundle, offers_with_financing)
+
+        trust = _build_trust(bundle)
+        sanity = run_sanity_checks(lead_resp, bundle, offers_with_financing)
+
+        briefing = BriefingResponse(
+            lead=lead_resp,
+            enrichment=bundle,
+            offers=offers_with_financing,
+            coach=coach_output,
+            data_trust=trust,
+            sanity_checks=sanity,
+        )
+
+        row.annual_electricity_kwh = annual_electricity_kwh
+        row.briefing_data = briefing.model_dump(mode="json")
+        await db.commit()
+        return briefing

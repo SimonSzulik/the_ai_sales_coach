@@ -1,14 +1,11 @@
-"""Sales coach synthesis powered by Anthropic Claude."""
+"""Sales coach synthesis — provider-agnostic via app.llm."""
 
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
-from anthropic import AsyncAnthropic
-
-from app.config import get_settings
+from app.llm import LLMError, complete_json, llm_configured
 from app.models import (
     EnrichmentBundle,
     LeadResponse,
@@ -30,6 +27,9 @@ RULES:
 - Qualifying questions should uncover information we don't have yet.
 - The urgency statement must reference real deadlines, price trends, or regulations.
 - If data confidence is low, mention what assumptions you're making.
+- If OSINT findings are present (estimated income, free cash flow, EV ownership) USE them: tailor financing
+  recommendation to affordability and reference EV ownership when proposing the wallbox/PV combo. Never quote
+  the exact OSINT numbers to the customer — treat them as internal preparation only.
 - Respond ONLY with valid JSON matching the schema below.
 
 OUTPUT JSON SCHEMA:
@@ -50,6 +50,15 @@ def _build_context(
     enrichment: EnrichmentBundle,
     offers: list[OfferWithFinancing],
 ) -> str:
+    osint_block: dict[str, Any] = {}
+    osint = getattr(enrichment, "osint", None)
+    if osint is not None:
+        osint_block = {
+            "data": osint.data,
+            "confidence": osint.confidence.value,
+            "source": osint.source,
+        }
+
     ctx: dict[str, Any] = {
         "customer": {
             "name": lead.name,
@@ -62,6 +71,7 @@ def _build_context(
         "energy_prices": enrichment.energy.data,
         "subsidies": enrichment.subsidies.data,
         "market_context": enrichment.market_context.data,
+        "osint": osint_block,
         "opportunity_score": enrichment.opportunity_score,
         "opportunity_drivers": enrichment.opportunity_drivers,
         "offers": [
@@ -92,27 +102,21 @@ async def generate_coaching(
     enrichment: EnrichmentBundle,
     offers: list[OfferWithFinancing],
 ) -> SalesCoachOutput:
-    settings = get_settings()
-    if not settings.anthropic_api_key:
-        raise ValueError("ANTHROPIC_API_KEY is not configured")
+    if not llm_configured():
+        raise ValueError("No LLM provider configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)")
 
     context = _build_context(lead, enrichment, offers)
 
-    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1500,
-        temperature=0.7,
-        system=SYSTEM_PROMPT,
-        messages=[
-            {"role": "user", "content": f"Generate a sales briefing for this lead:\n\n{context}"},
-        ],
-    )
+    try:
+        data = await complete_json(
+            system=SYSTEM_PROMPT,
+            user=f"Generate a sales briefing for this lead:\n\n{context}",
+            max_tokens=1500,
+            temperature=0.7,
+        )
+    except LLMError as exc:
+        raise ValueError(str(exc)) from exc
 
-    raw = response.content[0].text
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
-    raw = match.group(1).strip() if match else raw.strip()
-    data = json.loads(raw)
     raw_track = data.get("talk_track", [])
     if isinstance(raw_track, str):
         raw_track = [s.strip() for s in raw_track.split("\n") if s.strip()]

@@ -1,14 +1,10 @@
-"""Subsidy enricher — uses AI web search to find current federal and local subsidies."""
+"""Subsidy enricher — uses the active LLM (Anthropic or OpenAI) with web search."""
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 
-from anthropic import AsyncAnthropic
-
-from app.config import get_settings
+from app.llm import LLMError, complete_json, llm_configured
 from app.models import Confidence, EnrichmentResult
 
 logger = logging.getLogger(__name__)
@@ -47,10 +43,10 @@ Respond ONLY with valid JSON matching this exact schema:
 }
 """
 
+
 async def enrich_subsidies(address: str, zip_code: str, product_interest: str | None) -> EnrichmentResult:
-    settings = get_settings()
-    if not settings.anthropic_api_key:
-        return _fallback_subsidies(product_interest, "ANTHROPIC_API_KEY not configured")
+    if not llm_configured():
+        return _fallback_subsidies(product_interest, "No LLM provider configured")
 
     user_msg = (
         f"Location: {address}, {zip_code}, Germany\n"
@@ -59,24 +55,13 @@ async def enrich_subsidies(address: str, zip_code: str, product_interest: str | 
     )
 
     try:
-        client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+        data = await complete_json(
+            system=SUBSIDIES_PROMPT,
+            user=user_msg,
             max_tokens=1500,
             temperature=0.2,
-            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}],
-            system=SUBSIDIES_PROMPT,
-            messages=[{"role": "user", "content": user_msg}],
+            web_search=True,
         )
-
-        last_text = ""
-        for block in response.content:
-            if getattr(block, "type", None) == "text":
-                last_text = block.text
-
-        match = re.search(r"```(?:json)?\s*([\s\S]*?)```", last_text)
-        raw = match.group(1).strip() if match else last_text.strip()
-        data = json.loads(raw)
 
         total = float(data.get("total_potential_eur", 0.0))
         programs = data.get("programs", [])
@@ -87,10 +72,10 @@ async def enrich_subsidies(address: str, zip_code: str, product_interest: str | 
             data={
                 "programs": programs,
                 "total_potential_eur": total,
-            }
+            },
         )
 
-    except Exception as exc:
+    except (LLMError, Exception) as exc:
         logger.exception("Subsidy AI enrichment failed")
         return _fallback_subsidies(product_interest, str(exc))
 
@@ -139,7 +124,7 @@ def _fallback_subsidies(product_interest: str | None, reason: str) -> Enrichment
             "type": "grant",
             "products": ["heat_pump"],
             "notes": "Up to 40%-70% of investment costs for heat pumps",
-        }
+        },
     ]
 
     eligible = []
@@ -156,6 +141,6 @@ def _fallback_subsidies(product_interest: str | None, reason: str) -> Enrichment
         data={
             "programs": eligible,
             "total_potential_eur": total,
-            "note": f"Fallback used: {reason}"
+            "note": f"Fallback used: {reason}",
         },
     )
