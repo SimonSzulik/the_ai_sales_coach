@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { HOUSEHOLD_DEFAULT_KWH } from "@/lib/offerCalcConstants";
+import { isMissingString } from "@/lib/missingValue";
 import { getMapEmbedUrl } from "@/lib/api";
 import { useDashboard } from "@/components/DashboardContext";
 import { Button } from "@/components/ui/button";
@@ -95,7 +96,7 @@ function marketScanEurPerKwh(ep: Record<string, unknown>): number | undefined {
 }
 
 function InfoRow({ label, value }: { label: string; value: string | undefined | null }) {
-  if (!value) return null;
+  if (!value || isMissingString(value)) return null;
   return (
     <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
@@ -171,13 +172,17 @@ export default function OverviewTab({
   const hasSmard = smardRetail != null && smardRetail > 0;
   const hasMarketTariff = marketRetail != null && marketRetail > 0;
 
+  const hasBuildingField = (v: string | undefined) => v != null && !isMissingString(v);
   const buildingHasAny =
-    !!(bp.estimated_era || bp.building_type || bp.likely_heating || bp.historic_preservation);
+    hasBuildingField(bp.estimated_era) ||
+    hasBuildingField(bp.building_type) ||
+    hasBuildingField(bp.likely_heating) ||
+    hasBuildingField(bp.historic_preservation);
 
   const trendStr = typeof ep.trend === "string" ? ep.trend : "";
   const trendDetailStr = typeof ep.trend_detail === "string" ? ep.trend_detail : "";
   const showPriceTrend =
-    (trendStr && trendStr !== "NAV") || (trendDetailStr && trendDetailStr !== "NAV");
+    (trendStr && !isMissingString(trendStr)) || (trendDetailStr && !isMissingString(trendDetailStr));
 
   const optAngleNum =
     solarData.optimal_angle != null ? Number(solarData.optimal_angle) : Number.NaN;
@@ -372,7 +377,7 @@ export default function OverviewTab({
                     )}
                     {bp.building_type && <InfoRow label="Type" value={bp.building_type} />}
                     {bp.likely_heating && <InfoRow label="Heating" value={bp.likely_heating} />}
-                    {bp.historic_preservation && bp.historic_preservation !== "NAV" && (
+                    {bp.historic_preservation && !isMissingString(bp.historic_preservation) && (
                       <InfoRow label="Historic protection" value={bp.historic_preservation} />
                     )}
                   </div>
@@ -436,12 +441,12 @@ export default function OverviewTab({
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Price trend</h4>
                   <p className="text-sm text-muted-foreground">
-                    {trendStr && trendStr !== "NAV" && (
+                    {trendStr && !isMissingString(trendStr) && (
                       <Badge variant="outline" className="mr-2 text-xs capitalize">
                         {trendStr}
                       </Badge>
                     )}
-                    {trendDetailStr && trendDetailStr !== "NAV" ? trendDetailStr : null}
+                    {trendDetailStr && !isMissingString(trendDetailStr) ? trendDetailStr : null}
                     {!trendDetailStr && trendStr === "rising" && "Energy prices increasing in this context."}
                   </p>
                 </div>

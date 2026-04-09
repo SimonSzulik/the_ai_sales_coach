@@ -37,33 +37,34 @@ energy programs.
 For EVERY section, include a source_url and source_title linking to where you \
 found the data. Use the web search tool to verify tariffs, utilities, and \
 building context before concluding a field is unknown. \
-Do **not** use the literal string "NAV". For any string field you cannot \
-substantiate from sources, use JSON null (not the word "null" in quotes as text).
+For any **string** field you cannot substantiate from sources, use exactly \
+"_" (a single underscore). Do not use "NAV", "n/a", or the word null as text. \
+For unknown numeric fields use JSON null.
 
 Respond ONLY with valid JSON matching this exact schema:
 {
   "building_profile": {
-    "estimated_era": "string | null",
-    "building_type": "string | null",
-    "likely_heating": "string | null",
-    "historic_preservation": "yes" | "no" | "possible" | null,
+    "estimated_era": "string (use _ if unknown)",
+    "building_type": "string (use _ if unknown)",
+    "likely_heating": "string (use _ if unknown)",
+    "historic_preservation": "yes | no | possible | _",
     "source_url": "string | null",
     "source_title": "string | null"
   },
   "energy_prices": {
-    "cheapest_provider": "string | null",
-    "cheapest_tariff_name": "string | null",
+    "cheapest_provider": "string (use _ if unknown)",
+    "cheapest_tariff_name": "string (use _ if unknown)",
     "price_eur_kwh": "number | null",
-    "trend": "rising" | "stable" | "falling" | null,
-    "trend_detail": "string | null",
+    "trend": "rising | stable | falling | _",
+    "trend_detail": "string (use _ if unknown)",
     "source_url": "string | null",
     "source_title": "string | null"
   },
   "local_utility": {
-    "name": "string | null",
+    "name": "string (use _ if unknown)",
     "website": "string | null",
-    "local_tariffs": "string | null",
-    "local_programs": "string | null",
+    "local_tariffs": "string (use _ if unknown)",
+    "local_programs": "string (use _ if unknown)",
     "source_url": "string | null",
     "source_title": "string | null"
   }
@@ -94,25 +95,25 @@ the customer should act now. Focus on subsidy deadlines, price trends, and \
 regulatory changes.
 
 For regulations and programs, include source_url and source_title. \
-Use web search for city/Land-level facts. Do **not** use the literal string \
-"NAV"; use JSON null for unknown string fields.
+Use web search for city/Land-level facts. For unknown **string** fields use \
+exactly "_" (single underscore), not "NAV" or null-as-text.
 
 Respond ONLY with valid JSON matching this exact schema:
 {
   "local_regulations": [
     {
-      "regulation": "string | null",
-      "status": "string | null",
-      "relevance": "string | null",
+      "regulation": "string (use _ if unknown)",
+      "status": "string (use _ if unknown)",
+      "relevance": "string (use _ if unknown)",
       "source_url": "string | null",
       "source_title": "string | null"
     }
   ],
   "municipal_programs": [
     {
-      "name": "string | null",
-      "provider": "string | null",
-      "benefit": "string | null",
+      "name": "string (use _ if unknown)",
+      "provider": "string (use _ if unknown)",
+      "benefit": "string (use _ if unknown)",
       "source_url": "string | null",
       "source_title": "string | null"
     }

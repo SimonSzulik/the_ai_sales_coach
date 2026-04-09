@@ -4,6 +4,7 @@ import { Tooltip } from "@base-ui/react/tooltip";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { isMissingString } from "@/lib/missingValue";
 
 interface Source {
   source_url?: string | null;
@@ -57,12 +58,13 @@ const trendBadge: Record<string, "default" | "secondary" | "destructive"> = {
 
 function Val({ v }: { v: string | number | undefined | null }) {
   if (v == null || v === "") return <span className="text-muted-foreground/50 text-xs">—</span>;
-  if (String(v) === "NAV") return <span className="text-muted-foreground/50 text-xs italic">n/a</span>;
+  if (typeof v === "number" && Number.isFinite(v)) return <>{v}</>;
+  if (isMissingString(v)) return <span className="text-muted-foreground/50 text-xs">—</span>;
   return <>{v}</>;
 }
 
 function InfoButton({ url, title }: { url?: string | null; title?: string | null }) {
-  if (!url) return null;
+  if (!url || isMissingString(url)) return null;
   return (
     <Tooltip.Root>
       <Tooltip.Trigger
@@ -137,7 +139,8 @@ export default function MarketContext({ data }: Props) {
                   <tr>
                     <td className="text-muted-foreground pr-3 py-0.5">Historic prot.</td>
                     <td>
-                      {bp.historic_preservation && bp.historic_preservation !== "NAV" ? (
+                      {bp.historic_preservation &&
+                      ["yes", "no", "possible"].includes(bp.historic_preservation) ? (
                         <Badge
                           variant={bp.historic_preservation === "yes" ? "destructive" : bp.historic_preservation === "possible" ? "secondary" : "outline"}
                           className="text-xs"
@@ -173,12 +176,13 @@ export default function MarketContext({ data }: Props) {
                       )}
                     </td>
                   </tr>
-                  {(ep.cheapest_provider || ep.cheapest_tariff_name) && (
+                  {((ep.cheapest_provider && !isMissingString(ep.cheapest_provider)) ||
+                    (ep.cheapest_tariff_name && !isMissingString(ep.cheapest_tariff_name))) && (
                     <tr>
                       <td className="text-muted-foreground pr-3 py-0.5">Provider</td>
                       <td className="text-xs">
                         <Val v={ep.cheapest_provider} />
-                        {ep.cheapest_tariff_name && ep.cheapest_tariff_name !== "NAV" && (
+                        {ep.cheapest_tariff_name && !isMissingString(ep.cheapest_tariff_name) && (
                           <span className="text-muted-foreground"> — {ep.cheapest_tariff_name}</span>
                         )}
                       </td>
@@ -187,7 +191,7 @@ export default function MarketContext({ data }: Props) {
                   <tr>
                     <td className="text-muted-foreground pr-3 py-0.5">Trend</td>
                     <td>
-                      {ep.trend && ep.trend !== "NAV" ? (
+                      {ep.trend && !isMissingString(ep.trend) && ep.trend in trendBadge ? (
                         <Badge variant={trendBadge[ep.trend] ?? "secondary"} className="text-xs">{ep.trend}</Badge>
                       ) : (
                         <Val v={ep.trend} />
@@ -221,7 +225,7 @@ export default function MarketContext({ data }: Props) {
                   <div className="min-w-0 flex-1">
                     <span className="font-medium">{r.regulation}</span>
                     <InfoButton url={r.source_url} title={r.source_title} />
-                    {r.relevance && r.relevance !== "NAV" && (
+                    {r.relevance && !isMissingString(r.relevance) && (
                       <p className="text-xs text-muted-foreground mt-0.5">{r.relevance}</p>
                     )}
                   </div>
@@ -258,7 +262,7 @@ export default function MarketContext({ data }: Props) {
           </Card>
         )}
 
-        {lu && lu.name && (
+        {lu && lu.name && !isMissingString(lu.name) && (
           <Card>
             <CardContent className="pt-4 pb-3 px-4">
               <SectionHeader title="Local Utility" source={lu} />
