@@ -143,7 +143,7 @@ function roofDataBlock(roof: Record<string, unknown> | undefined): ReactNode {
       {addr ? <p className="text-[11px] text-muted-foreground">Address: {addr}</p> : null}
       <p>
         <span className="font-medium">Roof summary:</span>{" "}
-        {planes?.length != null ? `${planes.length} plane(s)` : "planes n/a"}
+        {planes?.length != null ? `${planes.length} plane(s)` : "_"}
         {totalM2 != null ? ` · total roof ≈ ${fmtInt(totalM2)} m²` : ""}
         {totalKwp != null ? ` · roof-estimated kWp ≈ ${totalKwp.toFixed(1)}` : ""}.
       </p>

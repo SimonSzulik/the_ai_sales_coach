@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { normalizeEvStatus } from "@/lib/missingValue";
 
 type Evidence = {
   source_url: string;
@@ -17,7 +18,7 @@ type Profile = {
 };
 
 export type OsintData = {
-  ev_status: "yes" | "no" | "NA";
+  ev_status: "yes" | "no" | "_" | "NA";
   certainty_pct: number;
   summary: string;
   proof_image_url: string | null;
@@ -33,20 +34,20 @@ interface Props {
 const STATUS_BADGE: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   yes: "default",
   no: "destructive",
-  NA: "outline",
+  _: "outline",
 };
 
 const STATUS_LABEL: Record<string, string> = {
   yes: "EV owner: YES",
   no: "EV owner: NO",
-  NA: "EV ownership: unknown",
+  _: "EV ownership: unknown",
 };
 
 export default function OsintCard({ osint }: Props) {
   const data = osint?.data;
   if (!data) return null;
 
-  const status = (data.ev_status || "NA") as "yes" | "no" | "NA";
+  const status = normalizeEvStatus(data.ev_status);
 
   return (
     <Card>
