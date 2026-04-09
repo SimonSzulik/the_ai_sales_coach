@@ -66,72 +66,23 @@ function fmt(n: number) {
   }).format(n);
 }
 
-function HouseIllustration({ tier }: { tier: string }) {
-  const isRec = tier === "recommended";
-  const isPrem = tier === "premium";
-  const roofColor = isRec ? "#93c5fd" : isPrem ? "#c4b5fd" : "#86efac";
-  const panelColor = isRec ? "#3b82f6" : isPrem ? "#8b5cf6" : "#22c55e";
-  const wallColor = isRec ? "#e0f2fe" : isPrem ? "#f5f3ff" : "#f0fdf4";
+const TIER_IMAGE: Record<string, { src: string; alt: string }> = {
+  starter: { src: "/offers/starter.png", alt: "House with rooftop solar panels" },
+  recommended: { src: "/offers/recommended.png", alt: "House with rooftop solar panels and battery storage" },
+  premium: { src: "/offers/premium.png", alt: "House with rooftop solar panels, battery storage and heat pump" },
+};
 
+function HouseIllustration({ tier }: { tier: string }) {
+  const img = TIER_IMAGE[tier] ?? TIER_IMAGE.starter;
   return (
-    <svg viewBox="0 0 280 160" className="w-full h-32" fill="none">
-      {/* Sky gradient */}
-      <rect width="280" height="160" rx="8" fill={isRec ? "#1e40af" : "#f8fafc"} opacity={isRec ? 0.1 : 1} />
-      {/* Ground */}
-      <rect y="130" width="280" height="30" fill={isRec ? "#1e3a5f" : "#e2e8f0"} opacity={0.3} />
-      {/* House body */}
-      <rect x="60" y="70" width="120" height="60" rx="2" fill={wallColor} stroke={isRec ? "#60a5fa" : "#cbd5e1"} strokeWidth="1.5" />
-      {/* Roof */}
-      <polygon points="50,72 120,25 190,72" fill={roofColor} stroke={isRec ? "#60a5fa" : "#94a3b8"} strokeWidth="1.5" />
-      {/* Solar panels on roof */}
-      <rect x="75" y="42" width="28" height="16" rx="1" fill={panelColor} opacity="0.9" />
-      <rect x="107" y="42" width="28" height="16" rx="1" fill={panelColor} opacity="0.9" />
-      {isPrem && <rect x="139" y="48" width="20" height="12" rx="1" fill={panelColor} opacity="0.7" />}
-      {/* Panel grid lines */}
-      <line x1="89" y1="42" x2="89" y2="58" stroke="white" strokeWidth="0.5" opacity="0.6" />
-      <line x1="75" y1="50" x2="103" y2="50" stroke="white" strokeWidth="0.5" opacity="0.6" />
-      <line x1="121" y1="42" x2="121" y2="58" stroke="white" strokeWidth="0.5" opacity="0.6" />
-      <line x1="107" y1="50" x2="135" y2="50" stroke="white" strokeWidth="0.5" opacity="0.6" />
-      {/* Door */}
-      <rect x="108" y="95" width="24" height="35" rx="2" fill={isRec ? "#60a5fa" : "#94a3b8"} opacity="0.6" />
-      {/* Windows */}
-      <rect x="72" y="82" width="22" height="18" rx="2" fill={isRec ? "#93c5fd" : "#bfdbfe"} opacity="0.7" />
-      <rect x="146" y="82" width="22" height="18" rx="2" fill={isRec ? "#93c5fd" : "#bfdbfe"} opacity="0.7" />
-      {/* Battery (for recommended/premium) */}
-      {(isRec || isPrem) && (
-        <g>
-          <rect x="200" y="100" width="24" height="30" rx="3" fill={panelColor} opacity="0.7" />
-          <rect x="207" y="96" width="10" height="5" rx="1" fill={panelColor} opacity="0.5" />
-          <line x1="212" y1="108" x2="212" y2="118" stroke="white" strokeWidth="1.5" opacity="0.8" />
-          <line x1="207" y1="113" x2="217" y2="113" stroke="white" strokeWidth="1.5" opacity="0.8" />
-        </g>
-      )}
-      {/* Heat pump (premium only) */}
-      {isPrem && (
-        <g>
-          <rect x="22" y="108" width="28" height="22" rx="3" fill="#a78bfa" opacity="0.6" />
-          <circle cx="36" cy="119" r="6" fill="none" stroke="white" strokeWidth="1" opacity="0.7" />
-          <path d="M33 119 L36 116 L39 119 L36 122 Z" fill="white" opacity="0.5" />
-        </g>
-      )}
-      {/* Sun */}
-      <circle cx="240" cy="30" r="14" fill="#fbbf24" opacity={isRec ? 0.6 : 0.4} />
-      {[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => {
-        const rad = (angle * Math.PI) / 180;
-        return (
-          <line
-            key={angle}
-            x1={240 + Math.cos(rad) * 18}
-            y1={30 + Math.sin(rad) * 18}
-            x2={240 + Math.cos(rad) * 22}
-            y2={30 + Math.sin(rad) * 22}
-            stroke="#fbbf24"
-            strokeWidth="1.5"
-            opacity={isRec ? 0.5 : 0.3}
-          />
-        );
-      })}
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={img.src}
+      alt={img.alt}
+      className="w-full h-32 object-contain"
+      loading="lazy"
+      draggable={false}
+    />
   );
 }
 
