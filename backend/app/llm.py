@@ -6,7 +6,8 @@ behind a single ``complete_json`` coroutine that returns a parsed dict.
 
 When ``web_search=True`` the wrapper enables the provider's first-party
 web search tool (Anthropic ``web_search_20250305`` or OpenAI Responses
-``web_search_preview``) so callers don't need to know provider details.
+built-in ``web_search`` with German ``user_location`` by default) so callers
+don't need to know provider details.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import logging
 import re
 from typing import Any
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,21 @@ async def _anthropic_complete(
 # OpenAI backend
 # ---------------------------------------------------------------------------
 
+def _openai_web_search_tool(settings: Settings) -> dict[str, Any]:
+    """GA web_search tool for Responses API — grounded for DE by default."""
+    cc = (settings.openai_web_search_country or "DE").strip().upper()[:2]
+    if len(cc) != 2:
+        cc = "DE"
+    size = (settings.openai_web_search_context_size or "medium").strip().lower()
+    if size not in ("low", "medium", "high"):
+        size = "medium"
+    return {
+        "type": "web_search",
+        "user_location": {"type": "approximate", "country": cc},
+        "search_context_size": size,
+    }
+
+
 async def _openai_complete(
     *,
     system: str,
@@ -102,6 +118,7 @@ async def _openai_complete(
     max_tokens: int,
     temperature: float,
     web_search: bool,
+    openai_allow_chat_fallback: bool = True,
 ) -> str:
     from openai import AsyncOpenAI
 
@@ -112,7 +129,8 @@ async def _openai_complete(
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     if web_search:
-        # Use the Responses API with the built-in web_search_preview tool.
+        # Responses API + GA web_search (not preview); force tool use for grounded JSON.
+        web_tool = _openai_web_search_tool(settings)
         try:
             resp = await client.responses.create(
                 model=settings.openai_model,
@@ -120,15 +138,20 @@ async def _openai_complete(
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
-                tools=[{"type": "web_search_preview"}],
+                tools=[web_tool],
+                tool_choice={"type": "web_search"},
                 temperature=temperature,
                 max_output_tokens=max_tokens,
             )
             return getattr(resp, "output_text", None) or _flatten_openai_response(resp)
         except Exception as exc:  # pragma: no cover - network/runtime fallback
+            if not openai_allow_chat_fallback:
+                raise LLMError(
+                    f"OpenAI Responses API with web_search failed (no chat fallback): {exc}"
+                ) from exc
             logger.warning("OpenAI web_search failed (%s); falling back to chat completion", exc)
 
-    # Standard chat completion fallback.
+    # Standard chat completion (no live web search when used after failed Responses).
     chat = await client.chat.completions.create(
         model=settings.openai_model,
         messages=[
@@ -163,12 +186,19 @@ async def complete_json(
     max_tokens: int = 1500,
     temperature: float = 0.3,
     web_search: bool = False,
+    openai_allow_chat_fallback_when_web_search: bool = True,
 ) -> dict[str, Any]:
     """Run an LLM completion expected to return JSON.
 
     Routes to the active provider (Anthropic or OpenAI) and returns the
     parsed JSON dict. Raises ``LLMError`` if the provider is unavailable
     or the response cannot be parsed.
+
+    When ``web_search`` is True and the active provider is OpenAI, the Responses
+    API is used first. If it fails, ``openai_allow_chat_fallback_when_web_search``
+    controls whether to fall back to chat completions **without** live web search
+    (default True for resilience). Callers that require real search results
+    should pass False.
     """
     provider = get_provider()
     if provider == "openai":
@@ -178,6 +208,7 @@ async def complete_json(
             max_tokens=max_tokens,
             temperature=temperature,
             web_search=web_search,
+            openai_allow_chat_fallback=openai_allow_chat_fallback_when_web_search,
         )
     else:
         text = await _anthropic_complete(

@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Tooltip } from "@base-ui/react/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { compassFromAzimuth } from "@/lib/roofGeometry";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -70,6 +72,37 @@ function modelStatusBadge(meta: RoofAnalysisMeta | null | undefined) {
     return <Badge variant="secondary">Low confidence</Badge>;
   }
   return <Badge variant="outline">Limited data</Badge>;
+}
+
+function RoofReadHelpTooltip() {
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        type="button"
+        delay={200}
+        className="inline-flex items-center justify-center w-5 h-5 shrink-0 rounded-full bg-muted text-muted-foreground hover:bg-blue-100 hover:text-blue-600 transition-colors text-[10px] font-bold leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="How to read these numbers"
+      >
+        i
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner side="bottom" sideOffset={8} align="start">
+          <Tooltip.Popup className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-md border bg-popover px-3 py-2.5 text-left text-xs text-popover-foreground shadow-md leading-relaxed">
+            <p className="font-medium text-foreground mb-2">How to read these numbers</p>
+            <ul className="list-disc pl-4 space-y-1.5">
+              <li>
+                <strong className="text-foreground font-medium">Area</strong> is the sum of mesh clusters (3D tiles), not a surveyed footprint — it can differ from the real roof.
+              </li>
+              <li>
+                <strong className="text-foreground font-medium">kWp</strong> uses a nameplate rule (~0.18 kW/m² DC). It does not include shading or inverter limits. Offer cards use the same kWp for sizing;{" "}
+                <strong className="text-foreground font-medium">annual kWh</strong> in offers also applies tilt and orientation factors.
+              </li>
+            </ul>
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  );
 }
 
 export default function RoofAnalysisTab({ leadId, roofData, roofMeta }: Props) {
@@ -166,10 +199,14 @@ export default function RoofAnalysisTab({ leadId, roofData, roofMeta }: Props) {
   );
 
   return (
+    <TooltipProvider>
     <div className="space-y-6 mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold">Roof Analysis</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold">Roof Analysis</h2>
+            <RoofReadHelpTooltip />
+          </div>
           <p className="text-sm text-muted-foreground">
             {roofData.address || "3D model validation against satellite data"}
           </p>
@@ -182,21 +219,6 @@ export default function RoofAnalysisTab({ leadId, roofData, roofMeta }: Props) {
           )}
         </div>
       </div>
-
-      <Card className="border-muted bg-muted/30">
-        <CardContent className="py-3 px-4 text-sm text-muted-foreground leading-relaxed">
-          <p className="font-medium text-foreground">How to read these numbers</p>
-          <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li>
-              <strong className="text-foreground font-medium">Area</strong> is the sum of mesh clusters (3D tiles), not a surveyed footprint — it can differ from the real roof.
-            </li>
-            <li>
-              <strong className="text-foreground font-medium">kWp</strong> uses a nameplate rule (~0.18 kW/m² DC). It does not include shading or inverter limits. Offer cards use the same kWp for sizing;{" "}
-              <strong className="text-foreground font-medium">annual kWh</strong> in offers also applies tilt and orientation factors.
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -358,5 +380,6 @@ export default function RoofAnalysisTab({ leadId, roofData, roofMeta }: Props) {
         </CardContent>
       </Card>
     </div>
+    </TooltipProvider>
   );
 }

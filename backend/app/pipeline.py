@@ -211,6 +211,7 @@ async def recompute_offers_only(
                 except Exception:
                     coach_output = None
 
+        row.annual_electricity_kwh = annual_electricity_kwh
         lead_resp = LeadResponse.model_validate(row)
         if coach_output is None:
             coach_output = await generate_coaching(lead_resp, bundle, offers_with_financing)
@@ -225,7 +226,6 @@ async def recompute_offers_only(
             data_trust=trust,
         )
 
-        row.annual_electricity_kwh = annual_electricity_kwh
         row.briefing_data = briefing.model_dump(mode="json")
         await db.commit()
         return briefing

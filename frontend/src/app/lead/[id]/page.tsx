@@ -211,6 +211,16 @@ export default function BriefingPage() {
         <RoofAnalysisTab
           leadId={id}
           roofData={e.roof_analysis?.data as Record<string, unknown> | undefined}
+          roofMeta={
+            e.roof_analysis
+              ? {
+                  confidence: e.roof_analysis.confidence,
+                  fallback_used: Boolean(
+                    (e.roof_analysis as { fallback_used?: boolean }).fallback_used,
+                  ),
+                }
+              : undefined
+          }
         />
       )}
 

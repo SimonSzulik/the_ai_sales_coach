@@ -11,7 +11,7 @@ The verdict is one of:
 
 * ``"yes"``  – proof picture exists (EV badge / charging cable / wallbox)
 * ``"no"``   – proof picture exists showing a non-EV ICE vehicle
-* ``"NA"``   – no hints found, or evidence is too weak / contradictory
+* ``"_"``    – no hints found, or evidence is too weak / contradictory
 
 Each verdict carries an ``evidence`` list with ``source_url`` and
 ``proof_image_url`` fields when available so the sales rep can audit the
@@ -28,6 +28,8 @@ from app.models import Confidence, EnrichmentResult
 
 logger = logging.getLogger(__name__)
 
+UNKNOWN_EV = "_"
+
 
 OSINT_SYSTEM_PROMPT = """\
 You are a German residential-energy sales OSINT assistant. Given a customer's
@@ -42,7 +44,7 @@ company websites, public Google Image results, and similar.
 
 DO NOT scrape paywalled content, do NOT invent profile URLs, do NOT guess
 photos you cannot actually see during the search. If you cannot verify
-something, return null / "NA".
+something, use JSON null for optional fields; for ev_status when unknown use "_".
 
 YOUR ONLY RESEARCH GOAL: does this customer already own an electric vehicle?
 
@@ -57,17 +59,17 @@ How to decide:
            current car AND it is unambiguously a combustion / hybrid
            vehicle (no charging port, classic ICE model). Cite proof_image_url
            AND source_url.
-- "NA"   → no clear evidence either way (no hints, contradictory hints,
+- "_"    → no clear evidence either way (no hints, contradictory hints,
            or images you cannot actually verify).
 
 The "certainty_pct" field must be 100 only when a real proof image was
-viewed. Otherwise use 0 (for "NA") or 50-90 if you found textual but not
+viewed. Otherwise use 0 (for "_") or 50-90 if you found textual but not
 visual evidence.
 
 Respond ONLY with valid JSON matching this exact schema:
 
 {
-  "ev_status": "yes" | "no" | "NA",
+  "ev_status": "yes" | "no" | "_",
   "certainty_pct": number,                // 0-100
   "summary": "string — 1-2 sentences explaining the verdict",
   "proof_image_url": "string | null",     // direct image URL if available
@@ -93,11 +95,15 @@ Respond ONLY with valid JSON matching this exact schema:
 
 def _coerce(data: dict[str, Any]) -> dict[str, Any]:
     """Normalize the LLM payload so downstream code can rely on it."""
-    status = str(data.get("ev_status", "NA")).strip().lower()
-    if status not in {"yes", "no", "na"}:
-        status = "na"
-    if status == "na":
-        status = "NA"
+    raw = str(data.get("ev_status", "") or "").strip().lower()
+    if raw == "yes":
+        status = "yes"
+    elif raw == "no":
+        status = "no"
+    elif raw in ("_", "na", "nav", "n/a", "unknown", ""):
+        status = UNKNOWN_EV
+    else:
+        status = UNKNOWN_EV
 
     try:
         certainty = float(data.get("certainty_pct", 0) or 0)
@@ -116,8 +122,14 @@ def _coerce(data: dict[str, Any]) -> dict[str, Any]:
     profiles = [p for p in profiles if isinstance(p, dict) and p.get("url")]
 
     proof = data.get("proof_image_url")
-    if proof in ("", "null", "NA"):
+    if not isinstance(proof, str):
         proof = None
+    else:
+        p = proof.strip()
+        if not p or p.lower() in ("null", "na", "nav", "n/a", "_"):
+            proof = None
+        else:
+            proof = p
 
     return {
         "ev_status": status,
@@ -138,7 +150,7 @@ async def enrich_osint(name: str, address: str, zip_code: str) -> EnrichmentResu
             confidence=Confidence.NONE,
             fallback_used=True,
             data={
-                "ev_status": "NA",
+                "ev_status": UNKNOWN_EV,
                 "certainty_pct": 0,
                 "summary": "OSINT skipped: no LLM provider configured.",
                 "proof_image_url": None,
@@ -178,7 +190,7 @@ async def enrich_osint(name: str, address: str, zip_code: str) -> EnrichmentResu
             fallback_used=True,
             error=str(exc),
             data={
-                "ev_status": "NA",
+                "ev_status": UNKNOWN_EV,
                 "certainty_pct": 0,
                 "summary": f"OSINT lookup failed: {exc}",
                 "proof_image_url": None,
