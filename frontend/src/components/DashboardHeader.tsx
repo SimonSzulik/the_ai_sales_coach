@@ -31,7 +31,7 @@ export default function DashboardHeader({
   return (
     <div className="mb-4">
       {/* Back link + actions row */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="mb-3">
         <Link
           href="/"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -41,12 +41,6 @@ export default function DashboardHeader({
           </svg>
           Back to leads
         </Link>
-        <button className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-          Add note
-        </button>
       </div>
 
       {/* Main header row */}
@@ -82,6 +76,9 @@ export default function DashboardHeader({
                 {score >= 70 ? "High opportunity" : score >= 40 ? "Medium opportunity" : "Low opportunity"}
               </Badge>
             </div>
+            <p className="text-sm text-muted-foreground mt-1.5 max-w-xl">
+              {[zipCode, address].filter(Boolean).join(" · ")}
+            </p>
           </div>
         </div>
 

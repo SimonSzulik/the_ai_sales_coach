@@ -36,6 +36,7 @@ interface Props {
 }
 
 function fmt(n: number) {
+  if (!Number.isFinite(n)) return "—";
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
     currency: "EUR",
@@ -44,6 +45,7 @@ function fmt(n: number) {
 }
 
 function fmtNum(n: number, unit: string) {
+  if (!Number.isFinite(n)) return "—";
   return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(n)} ${unit}`;
 }
 
@@ -95,9 +97,10 @@ function buildRows(annualHouseholdKwh: number) {
         </svg>
       ),
       getValue: (o: OfferData) => {
+        if (!Number.isFinite(h) || h <= 0) return "—";
         const selfConsumedKwh = o.offer.annual_production_kwh * (o.offer.self_consumption_pct / 100);
         const pct = Math.min(100, Math.round((selfConsumedKwh / h) * 100));
-        return `${pct}%`;
+        return Number.isFinite(pct) ? `${pct}%` : "—";
       },
     },
     {

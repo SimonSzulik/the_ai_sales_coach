@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { compassFromAzimuth } from "@/lib/roofGeometry";
-import { HOUSEHOLD_DEFAULT_KWH, TYPICAL_DE_HOUSEHOLD_KWH_ILLUSTRATIVE } from "@/lib/offerCalcConstants";
+import { HOUSEHOLD_DEFAULT_KWH } from "@/lib/offerCalcConstants";
 import { getMapEmbedUrl } from "@/lib/api";
+import { useDashboard } from "@/components/DashboardContext";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   lead: {
@@ -114,6 +115,7 @@ export default function OverviewTab({
   roofAnalysis,
   drivers,
 }: Props) {
+  const { setActiveSection } = useDashboard();
   const mc = marketContext.data as Record<string, unknown>;
   const bp = (mc?.building_profile ?? {}) as Record<string, string | undefined>;
   const ep = (mc?.energy_prices ?? {}) as Record<string, unknown>;
@@ -177,32 +179,45 @@ export default function OverviewTab({
   const showPriceTrend =
     (trendStr && trendStr !== "NAV") || (trendDetailStr && trendDetailStr !== "NAV");
 
-  const addressLine = [lead.address, lead.zip_code, city].filter(Boolean).join(" · ");
+  const optAngleNum =
+    solarData.optimal_angle != null ? Number(solarData.optimal_angle) : Number.NaN;
+  const optAzNum =
+    solarData.optimal_azimuth != null ? Number(solarData.optimal_azimuth) : Number.NaN;
+  const pvgisAnglesMeaningful =
+    Number.isFinite(optAngleNum) &&
+    Number.isFinite(optAzNum) &&
+    !(optAngleNum === 0 && optAzNum === 0);
 
   return (
     <div className="space-y-6 mt-4">
       <section className="space-y-3">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">At a glance</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Key numbers from this briefing. Opportunity score is in the header.
-          </p>
+        <div className="flex flex-wrap items-center gap-2 justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">At a glance</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Key numbers from this briefing. Opportunity score is in the header.
+            </p>
+          </div>
+          {lead.product_interest && (
+            <Badge variant="secondary" className="text-xs font-medium">
+              {lead.product_interest}
+            </Badge>
+          )}
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
-          Offer economics for this lead use{" "}
+          Household electricity for offer math:{" "}
           <strong className="text-foreground tabular-nums">
-            {annualHouseholdKwh.toLocaleString("de-DE")} kWh/year
-          </strong>{" "}
-          as annual household electricity — set on the lead form and adjustable with the usage slider on the Offers tab
-          (saved to this briefing). Leaving usage blank on the form uses the{" "}
-          <strong className="text-foreground tabular-nums">
-            {HOUSEHOLD_DEFAULT_KWH.toLocaleString("de-DE")} kWh/year
-          </strong>{" "}
-          default until you change it. Typical German household electricity use is often cited around{" "}
-          <strong className="text-foreground tabular-nums">
-            ~{TYPICAL_DE_HOUSEHOLD_KWH_ILLUSTRATIVE.toLocaleString("de-DE")} kWh/year
-          </strong>{" "}
-          (illustrative, not from this address).
+            {annualHouseholdKwh.toLocaleString("de-DE")} kWh/yr
+          </strong>
+          .{" "}
+          <button
+            type="button"
+            className="text-primary underline-offset-4 hover:underline font-medium"
+            onClick={() => setActiveSection("offers")}
+          >
+            Change on Offers
+          </button>{" "}
+          (form default {HOUSEHOLD_DEFAULT_KWH.toLocaleString("de-DE")} kWh/yr if unset).
         </p>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -307,7 +322,9 @@ export default function OverviewTab({
         <Card className="overflow-hidden border shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Property location</CardTitle>
-            <p className="text-sm text-muted-foreground">{addressLine || lead.address}</p>
+            <p className="text-sm text-muted-foreground">
+              {city ? `${city} · satellite preview` : "Satellite preview"}
+            </p>
           </CardHeader>
           <CardContent className="p-0 px-4 pb-4">
             <div className="rounded-xl border overflow-hidden shadow-inner">
@@ -321,19 +338,6 @@ export default function OverviewTab({
           </CardContent>
         </Card>
       )}
-
-      <div className="flex flex-wrap items-center gap-2 gap-y-2 text-sm">
-        {lead.product_interest && (
-          <Badge variant="secondary" className="text-xs font-medium">
-            {lead.product_interest}
-          </Badge>
-        )}
-        <span className="text-muted-foreground tabular-nums">
-          {[lead.zip_code, city].filter(Boolean).join(" ")}
-        </span>
-        <span className="text-muted-foreground hidden sm:inline">·</span>
-        <span className="text-muted-foreground text-xs sm:text-sm max-w-full">{lead.address}</span>
-      </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-4">
@@ -377,48 +381,20 @@ export default function OverviewTab({
 
               {roofAnalysis && (
                 <div>
-                  <h4 className="text-sm font-semibold mb-2">Roof geometry (3D)</h4>
+                  <h4 className="text-sm font-semibold mb-2">Roof</h4>
                   {hasRoofGeometry ? (
-                    <>
-                      {(totalRoofArea != null || roofPlanes.length > 0) && (
-                        <p className="text-xs text-muted-foreground mb-3">
-                          {totalRoofArea != null && <span>Total roof ~{fmt(totalRoofArea)} m²</span>}
-                          {totalRoofArea != null && roofPlanes.length > 0 && " · "}
-                          {roofPlanes.length > 0 && (
-                            <span>
-                              {roofPlanes.length} plane{roofPlanes.length === 1 ? "" : "s"}
-                            </span>
-                          )}
-                        </p>
-                      )}
-                      <div className="overflow-x-auto rounded-lg border">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b bg-muted/40 text-left">
-                              <th className="py-2 px-2 font-medium text-muted-foreground">#</th>
-                              <th className="py-2 px-2 font-medium text-muted-foreground">Tilt</th>
-                              <th className="py-2 px-2 font-medium text-muted-foreground">Orientation</th>
-                              <th className="py-2 px-2 font-medium text-muted-foreground hidden sm:table-cell">Area</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {roofPlanes.map((p, i) => (
-                              <tr key={i} className="border-b border-border/50 last:border-0">
-                                <td className="py-2 px-2 tabular-nums">{i + 1}</td>
-                                <td className="py-2 px-2 tabular-nums">{p.tilt_deg.toFixed(0)}°</td>
-                                <td className="py-2 px-2">
-                                  <span className="font-medium">{compassFromAzimuth(p.azimuth_deg)}</span>
-                                  <span className="text-muted-foreground"> ({p.azimuth_deg.toFixed(0)}°)</span>
-                                </td>
-                                <td className="py-2 px-2 tabular-nums hidden sm:table-cell">
-                                  {p.area_m2 != null ? `${fmt(p.area_m2)} m²` : "—"}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        {totalRoofArea != null && (
+                          <span>~{fmt(totalRoofArea)} m² total · </span>
+                        )}
+                        {roofPlanes.length} plane{roofPlanes.length === 1 ? "" : "s"}. Tilt, orientation, and 3D view
+                        are on Roof analysis.
+                      </p>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setActiveSection("roof")}>
+                        Open roof analysis
+                      </Button>
+                    </div>
                   ) : (
                     <p className="text-xs text-muted-foreground">
                       Roof geometry appears when 3D analysis completes.
@@ -427,21 +403,21 @@ export default function OverviewTab({
                 </div>
               )}
 
-              {solarData.optimal_angle != null && (
+              {pvgisAnglesMeaningful && (
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Location solar reference (PVGIS)</h4>
-                  <p className="text-xs text-muted-foreground mb-2">Ideal angles for this latitude — not measured roof.</p>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Reference fixed tilt (latitude rule) and south azimuth (PVGIS convention) — not measured roof.
+                  </p>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-muted-foreground text-xs">Ideal tilt (site)</span>
-                      <span className="font-medium tabular-nums">{String(solarData.optimal_angle)}°</span>
+                      <span className="text-muted-foreground text-xs">Reference tilt (site)</span>
+                      <span className="font-medium tabular-nums">{fmt(optAngleNum)}°</span>
                     </div>
-                    {solarData.optimal_azimuth != null && (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-muted-foreground text-xs">Ideal azimuth (site)</span>
-                        <span className="font-medium tabular-nums">{String(solarData.optimal_azimuth)}°</span>
-                      </div>
-                    )}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-muted-foreground text-xs">Reference azimuth (south = 0°)</span>
+                      <span className="font-medium tabular-nums">{fmt(optAzNum)}°</span>
+                    </div>
                   </div>
                 </div>
               )}
