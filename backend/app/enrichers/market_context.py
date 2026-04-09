@@ -35,32 +35,35 @@ Find their website, any notable local tariffs (Ökostrom, dynamic), and local \
 energy programs.
 
 For EVERY section, include a source_url and source_title linking to where you \
-found the data. If you cannot find data for a field, use "NAV" as the value.
+found the data. Use the web search tool to verify tariffs, utilities, and \
+building context before concluding a field is unknown. \
+Do **not** use the literal string "NAV". For any string field you cannot \
+substantiate from sources, use JSON null (not the word "null" in quotes as text).
 
 Respond ONLY with valid JSON matching this exact schema:
 {
   "building_profile": {
-    "estimated_era": "string",
-    "building_type": "string",
-    "likely_heating": "string",
-    "historic_preservation": "yes" | "no" | "possible",
+    "estimated_era": "string | null",
+    "building_type": "string | null",
+    "likely_heating": "string | null",
+    "historic_preservation": "yes" | "no" | "possible" | null,
     "source_url": "string | null",
     "source_title": "string | null"
   },
   "energy_prices": {
-    "cheapest_provider": "string",
-    "cheapest_tariff_name": "string",
-    "price_eur_kwh": number,
-    "trend": "rising" | "stable" | "falling",
-    "trend_detail": "string — max one sentence",
+    "cheapest_provider": "string | null",
+    "cheapest_tariff_name": "string | null",
+    "price_eur_kwh": "number | null",
+    "trend": "rising" | "stable" | "falling" | null,
+    "trend_detail": "string | null",
     "source_url": "string | null",
     "source_title": "string | null"
   },
   "local_utility": {
-    "name": "string",
+    "name": "string | null",
     "website": "string | null",
-    "local_tariffs": "string — one line",
-    "local_programs": "string — one line",
+    "local_tariffs": "string | null",
+    "local_programs": "string | null",
     "source_url": "string | null",
     "source_title": "string | null"
   }
@@ -91,24 +94,25 @@ the customer should act now. Focus on subsidy deadlines, price trends, and \
 regulatory changes.
 
 For regulations and programs, include source_url and source_title. \
-If you cannot find data, use "NAV" as the value.
+Use web search for city/Land-level facts. Do **not** use the literal string \
+"NAV"; use JSON null for unknown string fields.
 
 Respond ONLY with valid JSON matching this exact schema:
 {
   "local_regulations": [
     {
-      "regulation": "string — short name",
-      "status": "string — e.g. active, upcoming",
-      "relevance": "string — one sentence max",
+      "regulation": "string | null",
+      "status": "string | null",
+      "relevance": "string | null",
       "source_url": "string | null",
       "source_title": "string | null"
     }
   ],
   "municipal_programs": [
     {
-      "name": "string",
-      "provider": "string",
-      "benefit": "string — short, e.g. Up to 1500 EUR grant",
+      "name": "string | null",
+      "provider": "string | null",
+      "benefit": "string | null",
       "source_url": "string | null",
       "source_title": "string | null"
     }
@@ -144,6 +148,7 @@ async def enrich_market_context(
                 max_tokens=4096,
                 temperature=0.3,
                 web_search=True,
+                openai_allow_chat_fallback_when_web_search=False,
             ),
             complete_json(
                 system=REGULATIONS_PROMPT,
@@ -151,6 +156,7 @@ async def enrich_market_context(
                 max_tokens=4096,
                 temperature=0.3,
                 web_search=True,
+                openai_allow_chat_fallback_when_web_search=False,
             ),
         )
 
