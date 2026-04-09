@@ -188,8 +188,13 @@ async def maps_embed_url(
     lng: float = Query(...),
     zoom: int = Query(18, ge=1, le=21),
     maptype: str = Query("satellite", pattern="^(roadmap|satellite|hybrid|terrain)$"),
+    mode: str = Query("view", pattern="^(view|place)$"),
 ):
     """Return a pre-signed Google Maps Embed API URL for an iframe.
+
+    `mode=view` renders a plain map with no marker (Embed API's `view` endpoint).
+    `mode=place` renders a map with a pin at the given coordinates (Embed API's
+    `place` endpoint, which requires a `q` query).
 
     The key is kept server-side; the returned URL is opaque from the frontend's
     perspective (though browsers will see the key in the Network tab — this is
@@ -201,11 +206,20 @@ async def maps_embed_url(
     if not key:
         raise HTTPException(503, detail="Google Maps API key is not configured on the server.")
 
-    params = {
-        "key": key,
-        "center": f"{lat},{lng}",
-        "zoom": zoom,
-        "maptype": maptype,
-    }
-    url = f"https://www.google.com/maps/embed/v1/view?{urlencode(params)}"
+    if mode == "place":
+        params = {
+            "key": key,
+            "q": f"{lat},{lng}",
+            "zoom": zoom,
+            "maptype": maptype,
+        }
+        url = f"https://www.google.com/maps/embed/v1/place?{urlencode(params)}"
+    else:
+        params = {
+            "key": key,
+            "center": f"{lat},{lng}",
+            "zoom": zoom,
+            "maptype": maptype,
+        }
+        url = f"https://www.google.com/maps/embed/v1/view?{urlencode(params)}"
     return {"url": url}

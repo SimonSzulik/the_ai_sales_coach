@@ -70,7 +70,11 @@ export async function validateLocation(address: string, zipCode: string): Promis
 export async function getMapEmbedUrl(
   lat: number,
   lng: number,
-  opts: { zoom?: number; maptype?: "roadmap" | "satellite" | "hybrid" | "terrain" } = {},
+  opts: {
+    zoom?: number;
+    maptype?: "roadmap" | "satellite" | "hybrid" | "terrain";
+    mode?: "view" | "place";
+  } = {},
 ): Promise<string | null> {
   const params = new URLSearchParams({
     lat: String(lat),
@@ -78,6 +82,7 @@ export async function getMapEmbedUrl(
   });
   if (opts.zoom != null) params.set("zoom", String(opts.zoom));
   if (opts.maptype) params.set("maptype", opts.maptype);
+  if (opts.mode) params.set("mode", opts.mode);
   try {
     const res = await fetch(`${API_BASE}/api/maps/embed-url?${params.toString()}`);
     if (!res.ok) return null;

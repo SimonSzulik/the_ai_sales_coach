@@ -134,7 +134,7 @@ export default function OverviewTab({
       return;
     }
     let cancelled = false;
-    getMapEmbedUrl(lat, lon, { zoom: 19, maptype: "satellite" }).then((url) => {
+    getMapEmbedUrl(lat, lon, { zoom: 16, maptype: "roadmap", mode: "place" }).then((url) => {
       if (!cancelled) setMapUrl(url);
     });
     return () => {
